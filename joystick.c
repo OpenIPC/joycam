@@ -192,11 +192,24 @@ int main(int argc, char** argv) {
                     printf("Button %d %s\n",
                            ev.code, ev.value ? "pressed" : "released");
 
-                /* Button 0 -> ch8 min (arm), button 1 -> ch8 max (disarm). */
-                if (ev.code == 0)
+                /* Map first two buttons (BTN_SOUTH=304, BTN_EAST=305 are
+                   common on many controllers) to ch8/ch9.  Also accept
+                   legacy codes 0/1 for older devices. */
+                if (ev.code == 0 || ev.code == 304)
                     channels[8] = ev.value ? 1811 : 172;
-                if (ev.code == 1)
+                if (ev.code == 1 || ev.code == 305)
                     channels[9] = ev.value ? 1811 : 172;
+                if (ev.code == 307)
+                    channels[10] = ev.value ? 1811 : 172;
+                if (ev.code == 308)
+                    channels[11] = ev.value ? 1811 : 172;
+            }
+            else if (ev.type == EV_SYN) {
+                /* SYN events are normal — do not spam. */
+            }
+            else if (debug_mode) {
+                printf("Event type=%d code=%d value=%d\n",
+                       ev.type, ev.code, ev.value);
             }
 
             /* Send CRSF frame via serial port if available. */

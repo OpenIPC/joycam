@@ -37,7 +37,7 @@ crsf_tx.o: crsf_tx.c crsf_driver.h
 
 # --- Joystick ---
 joystick: joystick.o $(CRSF_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libevdev)
+	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport) $(shell $(PKG_CONFIG) --libs libevdev)
 
 joystick.o: joystick.c crsf_driver.h
 	$(CC) $(CFLAGS) -c -o $@ $<

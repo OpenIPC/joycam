@@ -2,16 +2,16 @@
  *
  * Copyright (c) OpenIPC  https://openipc.org  MIT License
  *
- * JoyCRSF.c — CRSF protocol parser, CRC8, packet generator
+ * joycrsf.c — CRSF protocol parser, CRC8, packet generator
  *
  */
 
-#include "JoyCRSF.h"
+#include "joycrsf.h"
 #include <string.h>
 
 static crsf_packet_t rx_packet;
 static uint8_t rx_index = 0;
-static _Bool have_sync = 0;
+static int have_sync = 0;
 
 #define CRSF_MAX_PAYLOAD_LEN 22
 
@@ -28,9 +28,11 @@ uint8_t crsf_crc8(const uint8_t* data, uint16_t len) {
     return crc;
 }
 
-_Bool crsf_validate_packet(crsf_packet_t* packet) {
+int crsf_validate_packet(crsf_packet_t* packet) {
+    if (packet->len < 2 || packet->len > CRSF_MAX_PAYLOAD_LEN + 2)
+        return 0;
     uint8_t calc_crc = crsf_crc8(&packet->type, packet->len - 1);
-    return calc_crc == packet->crc;
+    return calc_crc == packet->crc ? 1 : 0;
 }
 
 int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats_t* out_stats) {

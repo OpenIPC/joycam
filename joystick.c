@@ -19,7 +19,7 @@
 #include <syslog.h>
 #include <libserialport.h>
 #include <libevdev/libevdev.h>
-#include "JoyCRSF.h"
+#include "joycrsf.h"
 
 static volatile sig_atomic_t stop_flag = 0;
 
@@ -134,7 +134,10 @@ int main(int argc, char** argv) {
             closelog();
             return 1;
         }
-        sp_set_baudrate(port, 420000);
+        if (sp_set_baudrate(port, 420000) != SP_OK) {
+            syslog(LOG_ERR, "failed to set baudrate on %s", serial_port);
+            fprintf(stderr, "Error: cannot set baudrate 420000 on %s\n", serial_port);
+        }
         sp_set_parity(port, SP_PARITY_NONE);
         sp_set_bits(port, 8);
         sp_set_stopbits(port, 1);

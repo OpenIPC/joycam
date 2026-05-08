@@ -2,7 +2,7 @@
  *
  * Copyright (c) OpenIPC  https://openipc.org  MIT License
  *
- * JoyCRSF.h — CRSF protocol definitions, constants, structures
+ * joycrsf.h — CRSF protocol definitions, constants, structures
  *
  */
 
@@ -41,11 +41,8 @@ typedef struct {
 } crsf_link_stats_t;
 #pragma pack(pop)
 
-// --- Project version ---
-#define CRSF_BRIDGE_VERSION  "1.0.0"
-
 // --- Functions ---
-_Bool crsf_validate_packet(crsf_packet_t* packet);
+int crsf_validate_packet(crsf_packet_t* packet);
 int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats_t* out_stats);
 void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels);
 uint8_t crsf_crc8(const uint8_t* data, uint16_t len);

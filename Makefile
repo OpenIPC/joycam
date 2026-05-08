@@ -1,7 +1,7 @@
 #
 # Copyright (c) OpenIPC  https://openipc.org  MIT License
 #
-# CRSF Linux Bridge — Makefile
+# JoyCRSF — Makefile
 #
 
 CROSS		?=
@@ -15,7 +15,7 @@ CFLAGS		+= -ffunction-sections -fdata-sections
 CFLAGS		+= $(shell $(PKG_CONFIG) --cflags libevdev)
 LDFLAGS		:= -Wl,--gc-sections -s
 
-CRSF_OBJS	:= JoyCRSF.o
+CRSF_OBJS	:= joycrsf.o
 
 .PHONY: all clean
 
@@ -25,25 +25,25 @@ all: crsf_rx crsf_tx joystick
 crsf_rx: crsf_rx.o $(CRSF_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport)
 
-crsf_rx.o: crsf_rx.c JoyCRSF.h
+crsf_rx.o: crsf_rx.c joycrsf.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # --- CRSF transmitter ---
 crsf_tx: crsf_tx.o $(CRSF_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport)
 
-crsf_tx.o: crsf_tx.c JoyCRSF.h
+crsf_tx.o: crsf_tx.c joycrsf.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # --- Joystick ---
 joystick: joystick.o $(CRSF_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport) $(shell $(PKG_CONFIG) --libs libevdev)
 
-joystick.o: joystick.c JoyCRSF.h
+joystick.o: joystick.c joycrsf.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# --- Shared JoyCRSF library ---
-JoyCRSF.o: JoyCRSF.c JoyCRSF.h
+# --- Shared joycrsf library ---
+joycrsf.o: joycrsf.c joycrsf.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:

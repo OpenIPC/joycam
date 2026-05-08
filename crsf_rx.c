@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <syslog.h>
 #include "joycrsf.h"
 
@@ -54,8 +55,8 @@ int main(int argc, char** argv) {
     }
     signal(SIGPIPE, SIG_IGN);
 
-    struct sp_port* port;
-    if (crsf_serial_open(argv[1], &port, SP_MODE_READ, 420000) < 0) {
+    crsf_handle_t h = {NULL, -1};
+    if (crsf_serial_open(argv[1], &h, O_RDONLY, 420000) < 0) {
         closelog();
         return 1;
     }
@@ -68,7 +69,7 @@ int main(int argc, char** argv) {
     syslog(LOG_INFO, "listening on %s", argv[1]);
 
     while (!stop_flag) {
-        int ret = sp_blocking_read(port, &byte, 1, 100);
+        int ret = crsf_read(&h, &byte, 1, 100);
         if (ret <= 0) continue;
 
         ret = crsf_parse_byte(byte, &channels, &stats);
@@ -94,7 +95,7 @@ int main(int argc, char** argv) {
     }
 
     syslog(LOG_INFO, "shutting down");
-    crsf_serial_close(port);
+    crsf_serial_close(&h);
     closelog();
     return 0;
 }

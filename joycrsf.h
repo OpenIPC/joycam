@@ -47,8 +47,15 @@ typedef struct {
 #pragma pack(pop)
 
 // --- Serial port helpers ---
-int  crsf_serial_open(const char* port_name, struct sp_port** port, int mode, int baudrate);
-void crsf_serial_close(struct sp_port* port);
+typedef struct {
+    struct sp_port* sp;  /* libserialport handle, NULL if using POSIX */
+    int fd;              /* POSIX fd, -1 if using libserialport */
+} crsf_handle_t;
+
+int  crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baudrate);
+void crsf_serial_close(crsf_handle_t* h);
+int  crsf_read(crsf_handle_t* h, void* buf, size_t len, int timeout_ms);
+int  crsf_write(crsf_handle_t* h, const void* buf, size_t len, int timeout_ms);
 
 // --- Common utilities ---
 void crsf_print_channels(const uint16_t* channels, int count);

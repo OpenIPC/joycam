@@ -158,8 +158,8 @@ int main(int argc, char** argv) {
     }
 
     /* --- Open serial port (optional) --- */
-    struct sp_port* port = NULL;
-    if (serial_port && crsf_serial_open(serial_port, &port, SP_MODE_WRITE, 420000) < 0) {
+    crsf_handle_t h = {NULL, -1};
+    if (serial_port && crsf_serial_open(serial_port, &h, O_WRONLY, 420000) < 0) {
         libevdev_free(dev);
         close(fd);
         closelog();
@@ -171,10 +171,8 @@ int main(int argc, char** argv) {
         printf("Device: %s %s\n",
                libevdev_get_name(dev),
                libevdev_get_phys(dev) ? libevdev_get_phys(dev) : "");
-        if (port)
+        if (h.sp || h.fd >= 0)
             printf("  CRSF output on %s\n", serial_port);
-        else
-            printf("  (no serial port — HEX dump every frame)\n");
         fflush(stdout);
     }
     syslog(LOG_INFO, "started evdev=%s", device_path);
@@ -250,9 +248,8 @@ int main(int argc, char** argv) {
 
             /* Send CRSF frame or HEX dump. */
             crsf_generate_rc_packet(packet, channels);
-            if (port) {
-                int wret = sp_blocking_write(port, packet,
-                                             CRSF_TOTAL_FRAME_SIZE, 10);
+            if (h.sp || h.fd >= 0) {
+                int wret = crsf_write(&h, packet, CRSF_TOTAL_FRAME_SIZE, 10);
                 if (wret < 0)
                     syslog(LOG_ERR, "write error on serial port");
             } else if (verbose_mode) {
@@ -262,7 +259,7 @@ int main(int argc, char** argv) {
     }
 
     syslog(LOG_INFO, "shutting down");
-    crsf_serial_close(port);
+    crsf_serial_close(&h);
     libevdev_free(dev);
     close(fd);
     closelog();

@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <syslog.h>
 #include "joycrsf.h"
 
@@ -54,8 +55,8 @@ int main(int argc, char** argv) {
     }
     signal(SIGPIPE, SIG_IGN);
 
-    struct sp_port* port;
-    if (crsf_serial_open(argv[1], &port, SP_MODE_WRITE, 420000) < 0) {
+    crsf_handle_t h = {NULL, -1};
+    if (crsf_serial_open(argv[1], &h, O_WRONLY, 420000) < 0) {
         closelog();
         return 1;
     }
@@ -80,7 +81,7 @@ int main(int argc, char** argv) {
         if (val <= 172) { val = 172; direction = -direction; }
 
         crsf_generate_rc_packet(packet, channels);
-        if (sp_blocking_write(port, packet, CRSF_TOTAL_FRAME_SIZE, 100) < 0) {
+        if (crsf_write(&h, packet, CRSF_TOTAL_FRAME_SIZE, 100) < 0) {
             syslog(LOG_ERR, "write error on port");
             break;
         }
@@ -88,7 +89,7 @@ int main(int argc, char** argv) {
     }
 
     syslog(LOG_INFO, "shutting down");
-    crsf_serial_close(port);
+    crsf_serial_close(&h);
     closelog();
     return 0;
 }

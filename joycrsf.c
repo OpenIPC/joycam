@@ -9,6 +9,11 @@
 #include "joycrsf.h"
 #include <string.h>
 #include <syslog.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <poll.h>
+#include <errno.h>
 
 static crsf_packet_t rx_packet;
 static uint8_t rx_index = 0;
@@ -16,37 +21,76 @@ static int have_sync = 0;
 
 // --- Serial port helpers ---
 
-int crsf_serial_open(const char* port_name, struct sp_port** port, int mode, int baudrate) {
-    if (sp_get_port_by_name(port_name, port) != SP_OK) {
-        fprintf(stderr, "Error: cannot get serial port %s\n", port_name);
-        syslog(LOG_ERR, "failed to get serial port %s", port_name);
+int crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baudrate) {
+    h->sp = NULL;
+    h->fd = -1;
+
+    /* Try libserialport first (works for /dev/tty* devices). */
+    struct sp_port* sp = NULL;
+    if (sp_get_port_by_name(port_name, &sp) == SP_OK && sp) {
+        int sp_mode = SP_MODE_READ;
+        if (mode == O_RDWR)       sp_mode = SP_MODE_READ_WRITE;
+        else if (mode == O_WRONLY) sp_mode = SP_MODE_WRITE;
+        if (sp_open(sp, sp_mode) == SP_OK) {
+            sp_set_baudrate(sp, baudrate);
+            sp_set_parity(sp, SP_PARITY_NONE);
+            sp_set_bits(sp, 8);
+            sp_set_stopbits(sp, 1);
+            h->sp = sp;
+            return 0;
+        }
+        sp_free_port(sp);
+    }
+
+    /* Fallback: POSIX open for PTY and other non-standard devices. */
+    int oflags = O_NOCTTY;
+    if (mode == O_RDONLY)      oflags |= O_RDONLY;
+    else if (mode == O_WRONLY) oflags |= O_WRONLY;
+    else                       oflags |= O_RDWR;
+
+    h->fd = open(port_name, oflags);
+    if (h->fd < 0) {
+        fprintf(stderr, "Error: cannot open %s: %s\n", port_name, strerror(errno));
+        syslog(LOG_ERR, "failed to open %s: %s", port_name, strerror(errno));
         return -1;
     }
-    if (sp_open(*port, mode) != SP_OK) {
-        fprintf(stderr, "Error: cannot open serial port %s\n", port_name);
-        syslog(LOG_ERR, "failed to open serial port %s", port_name);
-        sp_free_port(*port);
-        *port = NULL;
-        return -1;
+
+    /* Configure termios for CRSF (420000 8N1). */
+    struct termios tio;
+    if (tcgetattr(h->fd, &tio) == 0) {
+        cfsetospeed(&tio, baudrate);
+        cfsetispeed(&tio, baudrate);
+        tio.c_cflag &= ~(CSIZE | PARENB | CSTOPB);
+        tio.c_cflag |= CS8 | CLOCAL | CREAD;
+        tio.c_iflag  = IGNBRK;
+        tio.c_oflag  = 0;
+        tio.c_lflag  = 0;
+        tcsetattr(h->fd, TCSANOW, &tio);
     }
-    if (sp_set_baudrate(*port, baudrate) != SP_OK) {
-        fprintf(stderr, "Error: cannot set baudrate %d on %s\n", baudrate, port_name);
-        syslog(LOG_ERR, "failed to set baudrate %d on %s", baudrate, port_name);
-    }
-    if (sp_set_parity(*port, SP_PARITY_NONE) != SP_OK)
-        syslog(LOG_WARNING, "cannot set parity on %s", port_name);
-    if (sp_set_bits(*port, 8) != SP_OK)
-        syslog(LOG_WARNING, "cannot set 8 bits on %s", port_name);
-    if (sp_set_stopbits(*port, 1) != SP_OK)
-        syslog(LOG_WARNING, "cannot set 1 stop bit on %s", port_name);
     return 0;
 }
 
-void crsf_serial_close(struct sp_port* port) {
-    if (port) {
-        sp_close(port);
-        sp_free_port(port);
-    }
+void crsf_serial_close(crsf_handle_t* h) {
+    if (h->sp) { sp_close(h->sp); sp_free_port(h->sp); }
+    if (h->fd >= 0) close(h->fd);
+    h->sp = NULL; h->fd = -1;
+}
+
+int crsf_read(crsf_handle_t* h, void* buf, size_t len, int timeout_ms) {
+    if (h->sp)
+        return sp_blocking_read(h->sp, buf, len, timeout_ms);
+    if (h->fd < 0) return -1;
+    struct pollfd pfd = { .fd = h->fd, .events = POLLIN };
+    int pr = poll(&pfd, 1, timeout_ms);
+    if (pr <= 0) return pr;
+    return (int)read(h->fd, buf, len);
+}
+
+int crsf_write(crsf_handle_t* h, const void* buf, size_t len, int timeout_ms) {
+    if (h->sp)
+        return sp_blocking_write(h->sp, buf, len, timeout_ms);
+    if (h->fd < 0) return -1;
+    return (int)write(h->fd, buf, len);
 }
 
 // --- Common utilities ---

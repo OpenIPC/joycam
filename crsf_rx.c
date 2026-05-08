@@ -12,7 +12,7 @@
 #include <signal.h>
 #include <syslog.h>
 #include <libserialport.h>
-#include "crsf_driver.h"
+#include "JoyCRSF.h"
 
 static volatile sig_atomic_t stop_flag = 0;
 

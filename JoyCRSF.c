@@ -2,11 +2,11 @@
  *
  * Copyright (c) OpenIPC  https://openipc.org  MIT License
  *
- * crsf_driver.c — CRSF protocol parser, CRC8, packet generator
+ * JoyCRSF.c — CRSF protocol parser, CRC8, packet generator
  *
  */
 
-#include "crsf_driver.h"
+#include "JoyCRSF.h"
 #include <string.h>
 
 static crsf_packet_t rx_packet;

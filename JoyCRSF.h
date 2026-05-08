@@ -2,12 +2,12 @@
  *
  * Copyright (c) OpenIPC  https://openipc.org  MIT License
  *
- * crsf_driver.h — CRSF protocol definitions, constants, structures
+ * JoyCRSF.h — CRSF protocol definitions, constants, structures
  *
  */
 
-#ifndef CRSF_DRIVER_H
-#define CRSF_DRIVER_H
+#ifndef JOYCRSF_H
+#define JOYCRSF_H
 
 #include <stdint.h>
 
@@ -50,4 +50,4 @@ int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats
 void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels);
 uint8_t crsf_crc8(const uint8_t* data, uint16_t len);
 
-#endif // CRSF_DRIVER_H
+#endif // JOYCRSF_H

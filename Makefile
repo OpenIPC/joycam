@@ -15,7 +15,7 @@ CFLAGS		+= -ffunction-sections -fdata-sections
 CFLAGS		+= $(shell $(PKG_CONFIG) --cflags libevdev)
 LDFLAGS		:= -Wl,--gc-sections -s
 
-CRSF_OBJS	:= crsf_driver.o
+CRSF_OBJS	:= JoyCRSF.o
 
 .PHONY: all clean
 
@@ -25,25 +25,25 @@ all: crsf_rx crsf_tx joystick
 crsf_rx: crsf_rx.o $(CRSF_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport)
 
-crsf_rx.o: crsf_rx.c crsf_driver.h
+crsf_rx.o: crsf_rx.c JoyCRSF.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # --- CRSF transmitter ---
 crsf_tx: crsf_tx.o $(CRSF_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport)
 
-crsf_tx.o: crsf_tx.c crsf_driver.h
+crsf_tx.o: crsf_tx.c JoyCRSF.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # --- Joystick ---
 joystick: joystick.o $(CRSF_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport) $(shell $(PKG_CONFIG) --libs libevdev)
 
-joystick.o: joystick.c crsf_driver.h
+joystick.o: joystick.c JoyCRSF.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# --- Shared CRSF driver ---
-crsf_driver.o: crsf_driver.c crsf_driver.h
+# --- Shared JoyCRSF library ---
+JoyCRSF.o: JoyCRSF.c JoyCRSF.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:

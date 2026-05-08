@@ -7,7 +7,7 @@
 CROSS		?=
 CC		:= $(CROSS)gcc
 PKG_CONFIG	?= pkg-config
-VERSION		:= 1.2.0
+VERSION		:= 1.2.1
 CFLAGS		:= -std=gnu99 -D_GNU_SOURCE -Os
 CFLAGS		+= -DVERSION=\"$(VERSION)\"
 CFLAGS		+= -Wall -Wextra -Werror=implicit-function-declaration -Wunused-result

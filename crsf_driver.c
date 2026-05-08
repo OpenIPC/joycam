@@ -14,8 +14,6 @@ static uint8_t rx_index = 0;
 static _Bool have_sync = 0;
 
 #define CRSF_MAX_PAYLOAD_LEN 22
-#define CRSF_PACKET_OVERHEAD  3  // sync + len + crc
-#define CRSF_MAX_PACKET_LEN   (CRSF_MAX_PAYLOAD_LEN + CRSF_PACKET_OVERHEAD)
 
 // CRC8 calculation polynomial 0xD5
 uint8_t crsf_crc8(const uint8_t* data, uint16_t len) {

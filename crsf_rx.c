@@ -7,6 +7,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <signal.h>
 #include <syslog.h>
@@ -23,7 +24,23 @@ static void handle_signal(int sig) {
 int main(int argc, char** argv) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <serial_port>\n", argv[0]);
+        fprintf(stderr, "       %s --help\n", argv[0]);
+        fprintf(stderr, "       %s --version\n", argv[0]);
         return 1;
+    }
+
+    if (argc == 2) {
+        if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+            printf("CRSF receiver v%s\n", VERSION);
+            printf("Usage: %s <serial_port>\n", argv[0]);
+            printf("  Reads CRSF frames from a serial port and decodes\n");
+            printf("  RC channels and link statistics.\n");
+            return 0;
+        }
+        if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0) {
+            printf("crsf_rx v%s\n", VERSION);
+            return 0;
+        }
     }
 
     openlog("crsf_rx", LOG_PID | LOG_CONS, LOG_DAEMON);
@@ -47,7 +64,10 @@ int main(int argc, char** argv) {
         closelog();
         return 1;
     }
-    sp_set_baudrate(port, 420000);
+    if (sp_set_baudrate(port, 420000) != SP_OK) {
+        syslog(LOG_ERR, "failed to set baudrate");
+        fprintf(stderr, "Error: cannot set baudrate 420000\n");
+    }
     sp_set_parity(port, SP_PARITY_NONE);
     sp_set_bits(port, 8);
     sp_set_stopbits(port, 1);

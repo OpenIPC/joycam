@@ -7,6 +7,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <signal.h>
 #include <syslog.h>
@@ -23,7 +24,23 @@ static void handle_signal(int sig) {
 int main(int argc, char** argv) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <serial_port>\n", argv[0]);
+        fprintf(stderr, "       %s --help\n", argv[0]);
+        fprintf(stderr, "       %s --version\n", argv[0]);
         return 1;
+    }
+
+    if (argc == 2) {
+        if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+            printf("CRSF transmitter v%s\n", VERSION);
+            printf("Usage: %s <serial_port>\n", argv[0]);
+            printf("  Generates CRSF RC channel packets at 100 Hz\n");
+            printf("  with a sawtooth sweep on channel 0.\n");
+            return 0;
+        }
+        if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0) {
+            printf("crsf_tx v%s\n", VERSION);
+            return 0;
+        }
     }
 
     openlog("crsf_tx", LOG_PID | LOG_CONS, LOG_DAEMON);
@@ -47,16 +64,21 @@ int main(int argc, char** argv) {
         closelog();
         return 1;
     }
-    sp_set_baudrate(port, 420000);
+    if (sp_set_baudrate(port, 420000) != SP_OK) {
+        syslog(LOG_ERR, "failed to set baudrate");
+        fprintf(stderr, "Error: cannot set baudrate 420000\n");
+    }
     sp_set_parity(port, SP_PARITY_NONE);
     sp_set_bits(port, 8);
     sp_set_stopbits(port, 1);
 
-    /* 27 = CRSF_SYNC_BYTE(1) + type(1) + payload_len(1) + payload(22) + crc(1)
-       or equivalently: sizeof(uint8_t)*3 + sizeof(payload) */
-    uint8_t packet[27];
-#define CRSF_RC_PACKET_SIZE (3 + 22) /* sync + len + type + payload(22) + crc */
-    uint16_t channels[16] = {992, 992, 992, 992}; // Midpoints
+    /* 27 = sync(1) + len(1) + type(1) + payload(22) + crc(1) */
+    enum { CRSF_RC_PACKET_SIZE = 3 + 22 };
+    uint8_t packet[CRSF_RC_PACKET_SIZE];
+    /* All channels initialised to mid-point (992). Never leave at 0 — some
+       flight controllers treat 0 as failsafe. */
+    uint16_t channels[16] = {992, 992, 992, 992, 992, 992, 992, 992,
+                             992, 992, 992, 992, 992, 992, 992, 992};
 
     printf("Sending CRSF frames to %s...\n", argv[1]);
     syslog(LOG_INFO, "sending on %s", argv[1]);
@@ -72,7 +94,10 @@ int main(int argc, char** argv) {
         if (val <= 172) { val = 172; direction = -direction; }
 
         crsf_generate_rc_packet(packet, channels);
-        sp_blocking_write(port, packet, CRSF_RC_PACKET_SIZE, 100);
+        if (sp_blocking_write(port, packet, CRSF_RC_PACKET_SIZE, 100) < 0) {
+            syslog(LOG_ERR, "write error on port");
+            break;
+        }
         usleep(10000); // 100Hz
     }
 

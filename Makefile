@@ -7,7 +7,9 @@
 CROSS		?=
 CC		:= $(CROSS)gcc
 PKG_CONFIG	?= pkg-config
+VERSION		:= 1.0.0
 CFLAGS		:= -std=gnu99 -D_GNU_SOURCE -Os
+CFLAGS		+= -DVERSION=\"$(VERSION)\"
 CFLAGS		+= -Wall -Wextra -Werror=implicit-function-declaration
 CFLAGS		+= -ffunction-sections -fdata-sections
 CFLAGS		+= $(shell $(PKG_CONFIG) --cflags libevdev)
@@ -35,7 +37,7 @@ crsf_tx.o: crsf_tx.c crsf_driver.h
 
 # --- Joystick ---
 joystick: joystick.o $(CRSF_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ -levdev
+	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libevdev)
 
 joystick.o: joystick.c crsf_driver.h
 	$(CC) $(CFLAGS) -c -o $@ $<

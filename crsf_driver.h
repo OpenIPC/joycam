@@ -41,6 +41,9 @@ typedef struct {
 } crsf_link_stats_t;
 #pragma pack(pop)
 
+// --- Project version ---
+#define CRSF_BRIDGE_VERSION  "1.0.0"
+
 // --- Functions ---
 _Bool crsf_validate_packet(crsf_packet_t* packet);
 int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats_t* out_stats);

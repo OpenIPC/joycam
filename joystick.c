@@ -25,7 +25,20 @@ static void handle_signal(int sig) {
 int main(int argc, char** argv) {
     const char* device_path = "/dev/input/by-id/usb-...-event-joystick";
 
-    if (argc >= 2) {
+    if (argc == 2) {
+        if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+            printf("Joystick reader v%s\n", VERSION);
+            printf("Usage: %s [device_path]\n", argv[0]);
+            printf("  Reads a USB joystick/gamepad via evdev and maps\n");
+            printf("  axis values to the CRSF range (172-1811).\n");
+            printf("  Default: %s\n", device_path);
+            printf("  Find your device: ls -l /dev/input/by-id/*-joystick\n");
+            return 0;
+        }
+        if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0) {
+            printf("joystick v%s\n", VERSION);
+            return 0;
+        }
         device_path = argv[1];
     } else {
         printf("Usage: %s [device_path]\n", argv[0]);
@@ -60,6 +73,9 @@ int main(int argc, char** argv) {
 
     printf("Listening for joystick events on %s...\n", device_path);
     syslog(LOG_INFO, "listening on %s", device_path);
+
+    /* Grab device so no other process steals events. */
+    libevdev_grab(dev, LIBEVDEV_GRAB);
 
     struct input_event ev;
     while (!stop_flag) {

@@ -5,6 +5,9 @@
 socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 pty,raw,echo=0,link=/tmp/ttyV1
 ```
 
+
+
+
 ## Receiver CRSF
 
 ```
@@ -25,6 +28,9 @@ Sending CRSF frames to /tmp/ttyV0... sweep on ch0
 ./joystick -p crsf -d /dev/input/by-id/usb-shanwan_Android_GamePad-event-joystick /tmp/ttyV0
 ```
 
+
+
+
 ## Receiver IBUS
 
 ```
@@ -44,3 +50,28 @@ Sending IBUS frames to /tmp/ttyV0... sweep on ch0
 ```
 ./joystick -p ibus -d /dev/input/by-id/usb-shanwan_Android_GamePad-event-joystick /tmp/ttyV0
 ```
+
+
+
+
+## Receiver SBUS
+
+```
+./sbus_rx /tmp/ttyV1
+Listening for SBUS data on /tmp/ttyV1...
+```
+
+## Transmitter SBUS
+
+```
+./sbus_tx /tmp/ttyV0
+Sending SBUS frames to /tmp/ttyV0... sweep on ch0
+```
+
+## Joystic SBUS
+
+```
+./joystick -p sbus -d /dev/input/by-id/usb-shanwan_Android_GamePad-event-joystick /tmp/ttyV0
+```
+
+

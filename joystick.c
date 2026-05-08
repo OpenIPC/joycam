@@ -172,10 +172,14 @@ int main(int argc, char** argv) {
     uint16_t channels[CRSF_NUM_CHANNELS] = {992, 992, 992, 992, 992, 992, 992, 992,
                                             992, 992, 992, 992, 992, 992, 992, 992};
     uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
+    unsigned int loop_count = 0;
 
     while (!stop_flag) {
         rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
-        if (rc == LIBEVDEV_READ_STATUS_SUCCESS) {
+        if (rc == -EAGAIN) {
+            /* No events available in non-blocking mode — this is normal. */
+        }
+        else if (rc == LIBEVDEV_READ_STATUS_SUCCESS) {
             if (ev.type == EV_ABS) {
                 int crsf_val = axis_to_crsf(ev.value);
 
@@ -226,6 +230,19 @@ int main(int argc, char** argv) {
                    == LIBEVDEV_READ_STATUS_SUCCESS)
                 ;
             syslog(LOG_WARNING, "joystick sync event handled");
+        }
+        else if (debug_mode) {
+            printf("libevdev: rc=%d (%s)\n", rc, strerror(-rc));
+        }
+
+        /* Heartbeat — show current state every ~1000 iterations (~1 sec). */
+        if (debug_mode && (++loop_count % 1000 == 0)) {
+            printf("\rState | Axes: 0:%-4d 1:%-4d 2:%-4d 3:%-4d 4:%-4d 5:%-4d 6:%-4d 7:%-4d | "
+                   "Btns: 8:%-4d 9:%-4d 10:%-4d 11:%-4d  \n",
+                   channels[0], channels[1], channels[2], channels[3],
+                   channels[4], channels[5], channels[6], channels[7],
+                   channels[8], channels[9], channels[10], channels[11]);
+            fflush(stdout);
         }
         usleep(1000);
     }

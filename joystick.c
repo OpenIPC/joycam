@@ -137,8 +137,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    unsigned int evdev_version;
-    if (ioctl(fd, EVIOCGVERSION, &evdev_version) < 0) {
+    if (ioctl(fd, EVIOCGVERSION, &(unsigned int){0}) < 0) {
         fprintf(stderr, "Error: %s is not an evdev device (%s)\n",
                 device_path, strerror(errno));
         close(fd);
@@ -173,6 +172,8 @@ int main(int argc, char** argv) {
                libevdev_get_phys(dev) ? libevdev_get_phys(dev) : "");
         if (h.sp || h.fd >= 0)
             printf("  CRSF output on %s\n", serial_port);
+        else
+            printf("  (no serial port)\n");
         fflush(stdout);
     }
     syslog(LOG_INFO, "started evdev=%s", device_path);

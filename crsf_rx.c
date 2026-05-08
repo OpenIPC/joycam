@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
         ret = crsf_parse_byte(byte, &channels, &stats);
 
         if (ret == 1) {
-            printf("\nChannels: ");
+            printf("Channels: ");
             crsf_print_channels(channels.channels, CRSF_NUM_CHANNELS);
             printf("\n");
             syslog(LOG_INFO, "CH %d %d %d %d",

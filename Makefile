@@ -17,7 +17,7 @@ LDFLAGS		:= -Wl,--gc-sections -s
 
 CRSF_OBJS	:= joycrsf.o
 
-DESTDIR		?= /usr
+DESTDIR		?=
 .PHONY: all clean install
 
 all: crsf_rx crsf_tx joystick

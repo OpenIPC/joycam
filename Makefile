@@ -7,7 +7,7 @@
 CROSS		?=
 CC		:= $(CROSS)gcc
 STRIP		:= $(CROSS)strip
-VERSION		:= 1.3.0
+VERSION		:= 1.4.0
 CFLAGS		:= -std=gnu99 -D_GNU_SOURCE -Os
 CFLAGS		+= -DVERSION=\"$(VERSION)\"
 CFLAGS		+= -Wall -Wextra -Werror=implicit-function-declaration -Wunused-result

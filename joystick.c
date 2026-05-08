@@ -18,7 +18,6 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
-#include <poll.h>
 #include <sys/ioctl.h>
 #include <linux/input.h>
 #include <libserialport.h>
@@ -171,101 +170,81 @@ int main(int argc, char** argv) {
     }
     syslog(LOG_INFO, "started evdev=%s", device_path);
 
+    printf("main loop start: evdev fd=%d\n", fd);
+    fflush(stdout);
+    syslog(LOG_INFO, "main loop start: evdev fd=%d", fd);
+
     /* --- Main loop --- */
     struct input_event ev;
     uint16_t channels[CRSF_NUM_CHANNELS] = {992, 992, 992, 992, 992, 992, 992, 992,
                                             992, 992, 992, 992, 992, 992, 992, 992};
     uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
-    struct pollfd pfd = { .fd = fd, .events = POLLIN };
-    unsigned int heartbeat_ms = 500;
-    int poll_rc;
 
-    if (debug_mode)
+    /* Print device info */
+    if (debug_mode) {
+        printf("Device: %s %s\n",
+               libevdev_get_name(dev),
+               libevdev_get_phys(dev) ? libevdev_get_phys(dev) : "");
         fflush(stdout);
+    }
 
     while (!stop_flag) {
-        /* Use poll() with a timeout so we never block indefinitely,
-           and can show a heartbeat even when no events arrive. */
-        poll_rc = poll(&pfd, 1, heartbeat_ms);
-        if (poll_rc < 0) {
-            if (errno == EINTR) continue;
-            syslog(LOG_ERR, "poll error: %s", strerror(errno));
-            break;
+        rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_BLOCKING, &ev);
+        if (rc == -EINTR) {
+            /* Interrupted by signal — check stop_flag. */
+            continue;
         }
-        if (poll_rc == 0) {
-            /* Timeout — show heartbeat. */
+        if (rc != LIBEVDEV_READ_STATUS_SUCCESS) {
             if (debug_mode) {
-                printf("\rState | Axes: 0:%-4d 1:%-4d 2:%-4d 3:%-4d 4:%-4d 5:%-4d 6:%-4d 7:%-4d | "
-                       "Btns: 8:%-4d 9:%-4d 10:%-4d 11:%-4d  \n",
-                       channels[0], channels[1], channels[2], channels[3],
-                       channels[4], channels[5], channels[6], channels[7],
-                       channels[8], channels[9], channels[10], channels[11]);
+                printf("libevdev: rc=%d (%s)\n", rc, strerror(-rc));
                 fflush(stdout);
             }
             continue;
         }
 
-        /* Drain all pending events without blocking. */
-        while ((rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev)) == LIBEVDEV_READ_STATUS_SUCCESS) {
-            if (ev.type == EV_ABS) {
-                int crsf_val = axis_to_crsf(ev.value);
+        if (ev.type == EV_ABS) {
+            int crsf_val = axis_to_crsf(ev.value);
 
-                /* Map first 8 axes to CRSF channels 0-7. */
-                if (ev.code < 8)
-                    channels[ev.code] = crsf_val;
+            /* Map first 8 axes to CRSF channels 0-7. */
+            if (ev.code < 8)
+                channels[ev.code] = crsf_val;
 
-                if (debug_mode)
-                    printf("Axis %d: value %d -> CRSF %d\n",
-                           ev.code, ev.value, crsf_val);
-            }
-            else if (ev.type == EV_KEY && ev.value != 2) {
-                if (debug_mode)
-                    printf("Button %d %s\n",
-                           ev.code, ev.value ? "pressed" : "released");
+            if (debug_mode)
+                printf("Axis %d: value %d -> CRSF %d\n",
+                       ev.code, ev.value, crsf_val);
+        }
+        else if (ev.type == EV_KEY && ev.value != 2) {
+            if (debug_mode)
+                printf("Button %d %s\n",
+                       ev.code, ev.value ? "pressed" : "released");
 
-                /* Map first two buttons (BTN_SOUTH=304, BTN_EAST=305 are
-                   common on many controllers) to ch8/ch9.  Also accept
-                   legacy codes 0/1 for older devices. */
-                if (ev.code == 0 || ev.code == 304)
-                    channels[8] = ev.value ? 1811 : 172;
-                if (ev.code == 1 || ev.code == 305)
-                    channels[9] = ev.value ? 1811 : 172;
-                if (ev.code == 307)
-                    channels[10] = ev.value ? 1811 : 172;
-                if (ev.code == 308)
-                    channels[11] = ev.value ? 1811 : 172;
-            }
-            else if (ev.type == EV_SYN) {
-                /* SYN events are normal — do not spam. */
-            }
-            else if (debug_mode) {
-                printf("Event type=%d code=%d value=%d\n",
-                       ev.type, ev.code, ev.value);
-            }
-
-            /* Send CRSF frame via serial port after every event. */
-            if (port) {
-                crsf_generate_rc_packet(packet, channels);
-                int wret = sp_blocking_write(port, packet, CRSF_TOTAL_FRAME_SIZE, 10);
-                if (wret < 0) {
-                    syslog(LOG_ERR, "write error on serial port");
-                }
-            }
+            /* Map first two buttons (BTN_SOUTH=304, BTN_EAST=305 are
+               common on many controllers) to ch8/ch9.  Also accept
+               legacy codes 0/1 for older devices. */
+            if (ev.code == 0 || ev.code == 304)
+                channels[8] = ev.value ? 1811 : 172;
+            if (ev.code == 1 || ev.code == 305)
+                channels[9] = ev.value ? 1811 : 172;
+            if (ev.code == 307)
+                channels[10] = ev.value ? 1811 : 172;
+            if (ev.code == 308)
+                channels[11] = ev.value ? 1811 : 172;
+        }
+        else if (ev.type == EV_SYN) {
+            /* SYN events are normal — do not spam. */
+        }
+        else if (debug_mode) {
+            printf("Event type=%d code=%d value=%d\n",
+                   ev.type, ev.code, ev.value);
         }
 
-        /* Handle sync events (device reconnected). */
-        if (rc == LIBEVDEV_READ_STATUS_SYNC) {
-            syslog(LOG_WARNING, "joystick sync event");
-            while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_SYNC, &ev)
-                   == LIBEVDEV_READ_STATUS_SUCCESS)
-                ;
-        }
-        else if (rc == -EAGAIN) {
-            /* No more events — will go back to poll(). */
-        }
-        else if (rc < 0 && debug_mode) {
-            printf("libevdev: rc=%d (%s)\n", rc, strerror(-rc));
-            fflush(stdout);
+        /* Send CRSF frame via serial port after every event. */
+        if (port) {
+            crsf_generate_rc_packet(packet, channels);
+            int wret = sp_blocking_write(port, packet, CRSF_TOTAL_FRAME_SIZE, 10);
+            if (wret < 0) {
+                syslog(LOG_ERR, "write error on serial port");
+            }
         }
     }
 

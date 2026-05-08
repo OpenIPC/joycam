@@ -136,8 +136,8 @@ int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats
         return -1;
 
     // Finite State Machine for packet parsing
-    // Fast re-sync: if we see a sync byte while already parsing, restart
-    if (have_sync && data == CRSF_SYNC_BYTE) {
+    // Fast re-sync: only before we've read the length byte
+    if (have_sync && rx_index < 2 && data == CRSF_SYNC_BYTE) {
         rx_index = 0;
         rx_packet.sync = data;
         return 0;

@@ -13,6 +13,10 @@ static crsf_packet_t rx_packet;
 static uint8_t rx_index = 0;
 static _Bool have_sync = 0;
 
+#define CRSF_MAX_PAYLOAD_LEN 22
+#define CRSF_PACKET_OVERHEAD  3  // sync + len + crc
+#define CRSF_MAX_PACKET_LEN   (CRSF_MAX_PAYLOAD_LEN + CRSF_PACKET_OVERHEAD)
+
 // CRC8 calculation polynomial 0xD5
 uint8_t crsf_crc8(const uint8_t* data, uint16_t len) {
     uint8_t crc = 0;
@@ -33,26 +37,37 @@ _Bool crsf_validate_packet(crsf_packet_t* packet) {
 
 int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats_t* out_stats) {
     // Finite State Machine for packet parsing
-    if (!have_sync && data == CRSF_SYNC_BYTE) {
-        have_sync = 1;
-        rx_packet.sync = data;
+    // State 1: wait for sync byte
+    if (!have_sync) {
+        if (data == CRSF_SYNC_BYTE) {
+            have_sync = 1;
+            rx_packet.sync = data;
+        }
         return 0;
     }
 
-    if (have_sync) {
+    // State 2: read length byte
+    if (have_sync && rx_index == 0) {
         rx_packet.len = data;
         rx_index = 2;
-        have_sync = 0;
+
+        // Validate length: must be >= 3 (type + payload[0] + crc) and within bounds
+        if (rx_packet.len < 3 || rx_packet.len > CRSF_MAX_PAYLOAD_LEN + 2) {
+            rx_index = 0;
+            have_sync = 0;
+            return -1; // Invalid frame length
+        }
         return 0;
     }
 
+    // State 3: read remaining bytes
     uint8_t* packet_ptr = (uint8_t*)&rx_packet;
     packet_ptr[rx_index++] = data;
 
     if (rx_index >= (rx_packet.len + 2)) {
+        // Packet complete - validate CRC
         if (!crsf_validate_packet(&rx_packet)) {
-            rx_index = 0;
-            return -1; // CRC Error
+            goto reset_and_error;
         }
 
         // RC Channels Packet
@@ -69,19 +84,28 @@ int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats
                 }
             }
             rx_index = 0;
+            have_sync = 0;
             return 1;
         }
         // Link Statistics Packet
-        else if (rx_packet.type == CRSF_FRAMETYPE_LINK_STATISTICS && out_stats) {
+        if (rx_packet.type == CRSF_FRAMETYPE_LINK_STATISTICS && out_stats) {
             memcpy(out_stats, rx_packet.payload, sizeof(crsf_link_stats_t));
             rx_index = 0;
+            have_sync = 0;
             return 2;
         }
 
+        // Unknown packet type - skip but don't error
         rx_index = 0;
+        have_sync = 0;
         return 0;
     }
     return 0;
+
+reset_and_error:
+    rx_index = 0;
+    have_sync = 0;
+    return -1; // CRC Error
 }
 
 void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels) {

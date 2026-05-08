@@ -43,7 +43,6 @@ typedef struct {
 #pragma pack(pop)
 
 // --- Functions ---
-void crsf_init(void);
 _Bool crsf_validate_packet(crsf_packet_t* packet);
 int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats_t* out_stats);
 void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels);

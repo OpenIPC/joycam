@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
 
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
+    signal(SIGPIPE, SIG_IGN);
 
     int fd = open(device_path, O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
@@ -63,7 +64,7 @@ int main(int argc, char** argv) {
     struct input_event ev;
     while (!stop_flag) {
         rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
-        if (rc == 0) {
+        if (rc == LIBEVDEV_READ_STATUS_SUCCESS) {
             if (ev.type == EV_ABS) {
                 // Map axis values to CRSF channel range (172-1811)
                 // For Linux evdev, values are typically -32767 to 32767
@@ -71,10 +72,16 @@ int main(int argc, char** argv) {
                 printf("Axis %d: value %d -> CRSF %d\n", ev.code, ev.value, channel_val);
                 syslog(LOG_INFO, "Axis %d value %d crsf %d", ev.code, ev.value, channel_val);
             }
-            else if (ev.type == EV_KEY && ev.value == 1) {
-                printf("Button %d pressed\n", ev.code);
-                syslog(LOG_INFO, "Button %d pressed", ev.code);
+            else if (ev.type == EV_KEY && ev.value != 2) {
+                printf("Button %d %s\n", ev.code, ev.value ? "pressed" : "released");
+                syslog(LOG_INFO, "Button %d %s", ev.code, ev.value ? "pressed" : "released");
             }
+        }
+        else if (rc == LIBEVDEV_READ_STATUS_SYNC) {
+            // Device was disconnected/reconnected — drain sync events
+            while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_SYNC, &ev) == LIBEVDEV_READ_STATUS_SUCCESS)
+                ;
+            syslog(LOG_WARNING, "joystick sync event handled");
         }
         usleep(1000);
     }

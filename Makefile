@@ -6,10 +6,11 @@
 
 CROSS		?=
 CC		:= $(CROSS)gcc
+PKG_CONFIG	?= pkg-config
 CFLAGS		:= -std=gnu99 -D_GNU_SOURCE -Os
 CFLAGS		+= -Wall -Wextra -Werror=implicit-function-declaration
 CFLAGS		+= -ffunction-sections -fdata-sections
-CFLAGS		+= -I/usr/include/libevdev-1.0
+CFLAGS		+= $(shell $(PKG_CONFIG) --cflags libevdev)
 LDFLAGS		:= -Wl,--gc-sections -s
 
 CRSF_OBJS	:= crsf_driver.o

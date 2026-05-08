@@ -11,7 +11,6 @@
 #include <signal.h>
 #include <syslog.h>
 #include <libserialport.h>
-#include <time.h>
 #include "crsf_driver.h"
 
 static volatile sig_atomic_t stop_flag = 0;
@@ -32,10 +31,22 @@ int main(int argc, char** argv) {
 
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
+    signal(SIGPIPE, SIG_IGN);
 
     struct sp_port* port;
-    sp_get_port_by_name(argv[1], &port);
-    sp_open(port, SP_MODE_READ_WRITE);
+    if (sp_get_port_by_name(argv[1], &port) != SP_OK) {
+        fprintf(stderr, "Failed to get port: %s\n", argv[1]);
+        syslog(LOG_ERR, "failed to get port %s", argv[1]);
+        closelog();
+        return 1;
+    }
+    if (sp_open(port, SP_MODE_READ_WRITE) != SP_OK) {
+        fprintf(stderr, "Failed to open port: %s\n", argv[1]);
+        syslog(LOG_ERR, "failed to open port %s", argv[1]);
+        sp_free_port(port);
+        closelog();
+        return 1;
+    }
     sp_set_baudrate(port, 420000);
     sp_set_parity(port, SP_PARITY_NONE);
     sp_set_bits(port, 8);

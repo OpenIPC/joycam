@@ -17,6 +17,9 @@
 #include <string.h>
 #include <signal.h>
 #include <syslog.h>
+#include <errno.h>
+#include <sys/ioctl.h>
+#include <linux/input.h>
 #include <libserialport.h>
 #include <libevdev/libevdev.h>
 #include "joycrsf.h"
@@ -103,11 +106,25 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    /* Verify device is a valid evdev before handing it to libevdev. */
+    unsigned int evdev_version;
+    if (ioctl(fd, EVIOCGVERSION, &evdev_version) < 0) {
+        fprintf(stderr, "Error: %s is not an evdev device (%s)\n",
+                device_path, strerror(errno));
+        fprintf(stderr, "  Check the device: ls -l %s\n", device_path);
+        fprintf(stderr, "  Available devices: ls -l /dev/input/by-id/\n");
+        close(fd);
+        closelog();
+        return 1;
+    }
+
     struct libevdev* dev;
     int rc = libevdev_new_from_fd(fd, &dev);
     if (rc < 0) {
-        fprintf(stderr, "Failed to init libevdev: %s\n", strerror(-rc));
-        syslog(LOG_ERR, "libevdev init failed: %s", strerror(-rc));
+        fprintf(stderr, "Error: libevdev init failed for %s: %s (rc=%d)\n",
+                device_path, strerror(-rc), rc);
+        syslog(LOG_ERR, "libevdev init failed for %s: %s",
+               device_path, strerror(-rc));
         close(fd);
         closelog();
         return 1;

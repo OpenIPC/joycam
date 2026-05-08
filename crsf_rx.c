@@ -45,8 +45,13 @@ int main(int argc, char** argv) {
     openlog("crsf_rx", LOG_PID | LOG_CONS, LOG_DAEMON);
     syslog(LOG_INFO, "starting on %s", argv[1]);
 
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
+    {   struct sigaction sa;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sa.sa_handler = handle_signal;
+        sigaction(SIGINT, &sa, NULL);
+        sigaction(SIGTERM, &sa, NULL);
+    }
     signal(SIGPIPE, SIG_IGN);
 
     struct sp_port* port;
@@ -70,9 +75,7 @@ int main(int argc, char** argv) {
 
         if (ret == 1) {
             printf("\nChannels: ");
-            for (int i = 0; i < CRSF_NUM_CHANNELS; i++) {
-                printf("%d:%d ", i, channels.channels[i]);
-            }
+            crsf_print_channels(channels.channels, CRSF_NUM_CHANNELS);
             printf("\n");
             syslog(LOG_INFO, "CH %d %d %d %d",
                    channels.channels[0], channels.channels[1],

@@ -46,5 +46,11 @@ joystick.o: joystick.c joycrsf.h
 joycrsf.o: joycrsf.c joycrsf.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+install: crsf_rx crsf_tx joystick
+	mkdir -p $(DESTDIR)/usr/local/bin
+	install -m 0755 crsf_rx $(DESTDIR)/usr/local/bin/
+	install -m 0755 crsf_tx $(DESTDIR)/usr/local/bin/
+	install -m 0755 joystick $(DESTDIR)/usr/local/bin/
+
 clean:
 	rm -f *.o crsf_rx crsf_tx joystick

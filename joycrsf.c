@@ -49,10 +49,18 @@ void crsf_serial_close(struct sp_port* port) {
 // --- Common utilities ---
 
 void crsf_print_channels(const uint16_t* channels, int count) {
-    for (int i = 0; i < count; i++) {
-        if (i > 0 && i % 8 == 0) printf(" | ");
-        printf("%d:%-4d ", i, channels[i]);
+    char buf[128];
+    int pos = 0;
+    for (int i = 0; i < count && pos < (int)sizeof(buf) - 10; i++) {
+        if (i > 0 && i % 8 == 0) {
+            buf[pos++] = ' ';
+            buf[pos++] = '|';
+            buf[pos++] = ' ';
+        }
+        pos += snprintf(buf + pos, sizeof(buf) - pos, "%d:%-4d ", i, channels[i]);
     }
+    buf[pos] = '\0';
+    fputs(buf, stdout);
 }
 
 void crsf_hex_dump(const uint8_t* data, int len, const char* label) {
@@ -62,16 +70,27 @@ void crsf_hex_dump(const uint8_t* data, int len, const char* label) {
     printf("\n");
 }
 
-// CRC8 calculation polynomial 0xD5
-uint8_t crsf_crc8(const uint8_t* data, uint16_t len) {
-    uint8_t crc = 0;
-    for (uint16_t i = 0; i < len; i++) {
-        crc ^= data[i];
-        for (uint8_t bit = 0; bit < 8; bit++) {
+// CRC8 with LUT (polynomial 0xD5)
+static uint8_t crc8_table[256];
+static int crc8_table_ready = 0;
+
+static void crc8_init(void) {
+    for (int i = 0; i < 256; i++) {
+        uint8_t crc = i;
+        for (int b = 0; b < 8; b++) {
             if (crc & 0x80) crc = (crc << 1) ^ 0xD5;
-            else crc = (crc << 1);
+            else crc <<= 1;
         }
+        crc8_table[i] = crc;
     }
+    crc8_table_ready = 1;
+}
+
+uint8_t crsf_crc8(const uint8_t* data, uint16_t len) {
+    if (!crc8_table_ready) crc8_init();
+    uint8_t crc = 0;
+    for (uint16_t i = 0; i < len; i++)
+        crc = crc8_table[crc ^ data[i]];
     return crc;
 }
 

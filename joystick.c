@@ -32,13 +32,15 @@ static void handle_signal(int sig) {
     stop_flag = 1;
 }
 
-/* Map evdev axis value to CRSF range (172..1811) using runtime axis limits. */
+/* Map evdev axis value to CRSF range (172..1811) using integer arithmetic. */
 static int axis_to_crsf(int value, int min, int max) {
     if (min == max) return 992;
-    double norm = (double)(value - min) / (double)(max - min);
-    if (norm < 0.0) norm = 0.0;
-    if (norm > 1.0) norm = 1.0;
-    return 172 + (int)(norm * (1811 - 172) + 0.5);
+    const int crsf_min = 172, crsf_max = 1811;
+    int64_t v = value - min;
+    int64_t d = max - min;
+    if (v < 0) v = 0;
+    if (v > d) v = d;
+    return (int)(crsf_min + v * (crsf_max - crsf_min + 1) / (d + 1));
 }
 
 /* Map button code 304-315 (BTN_SOUTH..BTN_TL2) to CRSF channel offset. */

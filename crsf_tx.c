@@ -45,8 +45,13 @@ int main(int argc, char** argv) {
     openlog("crsf_tx", LOG_PID | LOG_CONS, LOG_DAEMON);
     syslog(LOG_INFO, "starting on %s", argv[1]);
 
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
+    {   struct sigaction sa;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sa.sa_handler = handle_signal;
+        sigaction(SIGINT, &sa, NULL);
+        sigaction(SIGTERM, &sa, NULL);
+    }
     signal(SIGPIPE, SIG_IGN);
 
     struct sp_port* port;

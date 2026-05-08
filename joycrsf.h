@@ -17,7 +17,6 @@
 #define CRSF_FRAMETYPE_LINK_STATISTICS 0x14
 #define CRSF_NUM_CHANNELS 16
 #define CRSF_PAYLOAD_SIZE 22
-#define CRSF_MAX_PAYLOAD_LEN 22
 /* sync(1) + len(1) + type(1) + payload(CRSF_PAYLOAD_SIZE) + crc(1) */
 #define CRSF_TOTAL_FRAME_SIZE (3 + CRSF_PAYLOAD_SIZE + 1)
 
@@ -27,7 +26,7 @@ typedef struct {
     uint8_t sync;   // 0xC8
     uint8_t len;    // total length = type + payload + crc
     uint8_t type;   // e.g., 0x16 for RC channels
-    uint8_t payload[22];
+    uint8_t payload[CRSF_PAYLOAD_SIZE];
     uint8_t crc;
 } crsf_packet_t;
 

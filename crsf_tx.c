@@ -75,8 +75,8 @@ int main(int argc, char** argv) {
     uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
     /* All channels initialised to mid-point (992). Never leave at 0 — some
        flight controllers treat 0 as failsafe. */
-    uint16_t channels[16] = {992, 992, 992, 992, 992, 992, 992, 992,
-                             992, 992, 992, 992, 992, 992, 992, 992};
+    uint16_t channels[CRSF_NUM_CHANNELS] = {992, 992, 992, 992, 992, 992, 992, 992,
+                                            992, 992, 992, 992, 992, 992, 992, 992};
 
     printf("Sending CRSF frames to %s...\n", argv[1]);
     syslog(LOG_INFO, "sending on %s", argv[1]);

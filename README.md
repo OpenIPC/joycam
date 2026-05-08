@@ -61,7 +61,7 @@ Output:
 
 ```
 Listening for CRSF data on /dev/ttyUSB0...
-Channels: 0:992 1:1020 2:988 3:1700
+Channels: 0:992 1:1020 2:988 3:1700 4:992 5:992 6:992 7:992 8:992 9:992 10:992 11:992 12:992 13:992 14:992 15:992
 Link Quality: 99%  RSSI1: -45 RSSI2: -48 Power: 100
 ```
 
@@ -166,8 +166,8 @@ Move joystick sticks — the receiver shows live channel values:
 
 ```
 Listening for CRSF data on /tmp/ttyV1...
-Channels: 0:172 1:992 2:1811 3:992
-Channels: 0:988 1:1020 2:1700 3:1500
+Channels: 0:172 1:992 2:1811 3:992 4:992 5:992 6:992 7:992 8:992 9:992 10:992 11:992 12:992 13:992 14:992 15:992
+Channels: 0:988 1:1020 2:1700 3:1500 4:992 5:992 6:992 7:992 8:992 9:992 10:992 11:992 12:992 13:992 14:992 15:992
 ```
 
 **Axis mapping:** axes 0–7 are mapped to CRSF channels 0–7.  
@@ -178,11 +178,11 @@ Channels: 0:988 1:1020 2:1700 3:1500
 ```
 .
 ├── Makefile              — Build system
-├── joycrsf.h               — CRSF protocol constants, structures, prototypes
-├── joycrsf.c               — CRC8, packet parser FSM, packet generator
+├── joycrsf.h             — CRSF protocol constants, structures, prototypes
+├── joycrsf.c             — CRC8, packet parser FSM, packet generator
 ├── crsf_rx.c             — Serial receiver
 ├── crsf_tx.c             — Packet transmitter
-├── joystick.c            — evdev joystick reader (optional)
+├── joystick.c            — The evdev joystick reader (optional)
 └── README.md             — This file
 ```
 

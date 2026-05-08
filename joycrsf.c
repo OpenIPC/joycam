@@ -27,7 +27,7 @@ uint8_t crsf_crc8(const uint8_t* data, uint16_t len) {
 }
 
 int crsf_validate_packet(crsf_packet_t* packet) {
-    if (packet->len < 2 || packet->len > CRSF_MAX_PAYLOAD_LEN + 2)
+    if (packet->len < 2 || packet->len > CRSF_PAYLOAD_SIZE + 2)
         return 0;
     uint8_t calc_crc = crsf_crc8(&packet->type, packet->len - 1);
     return calc_crc == packet->crc ? 1 : 0;
@@ -61,7 +61,7 @@ int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats
         rx_index = 2;
 
         // Validate length: must be >= 3 (type + payload[0] + crc) and within bounds
-        if (rx_packet.len < 3 || rx_packet.len > CRSF_MAX_PAYLOAD_LEN + 2) {
+        if (rx_packet.len < 3 || rx_packet.len > CRSF_PAYLOAD_SIZE + 2) {
             rx_index = 0;
             have_sync = 0;
             return -1; // Invalid frame length
@@ -89,7 +89,7 @@ int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats
                 uint8_t  shift  = (i * 11) % 8;
                 uint32_t raw;
                 /* Most channels span 3 bytes; channel 15 fits in 2. */
-                if (offset + 2 < 22)
+                if (offset + 2 < CRSF_PAYLOAD_SIZE)
                     raw = payload[offset] | (payload[offset + 1] << 8)
                                            | (payload[offset + 2] << 16);
                 else
@@ -117,7 +117,7 @@ int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats
 }
 
 void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels) {
-    uint8_t payload[22] = {0};
+    uint8_t payload[CRSF_PAYLOAD_SIZE] = {0};
     for (int i = 0; i < CRSF_NUM_CHANNELS; i++) {
         uint32_t offset = (i * 11) / 8;
         uint8_t  shift  = (i * 11) % 8;
@@ -125,7 +125,7 @@ void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels) {
         payload[offset]     |= (bitmask << shift) & 0xFF;
         payload[offset + 1] |= (bitmask >> (8 - shift)) & 0xFF;
         /* Channel 15 needs only 2 bytes; guard against OOB write. */
-        if (offset + 2 < 22)
+        if (offset + 2 < CRSF_PAYLOAD_SIZE)
             payload[offset + 2] |= (bitmask >> (16 - shift)) & 0xFF;
     }
 

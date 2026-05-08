@@ -152,8 +152,8 @@ int main(int argc, char** argv) {
 
     /* --- Main loop --- */
     struct input_event ev;
-    uint16_t channels[16] = {992, 992, 992, 992, 992, 992, 992, 992,
-                             992, 992, 992, 992, 992, 992, 992, 992};
+    uint16_t channels[CRSF_NUM_CHANNELS] = {992, 992, 992, 992, 992, 992, 992, 992,
+                                            992, 992, 992, 992, 992, 992, 992, 992};
     uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
 
     while (!stop_flag) {

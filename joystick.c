@@ -40,7 +40,7 @@ static int axis_to_crsf(int value, int min, int max) {
     int64_t d = max - min;
     if (v < 0) v = 0;
     if (v > d) v = d;
-    return (int)(crsf_min + v * (crsf_max - crsf_min + 1) / (d + 1));
+    return (int)(crsf_min + (v * (crsf_max - crsf_min) + d / 2) / d);
 }
 
 /* Map button code 304-315 (BTN_SOUTH..BTN_TL2) to CRSF channel offset. */

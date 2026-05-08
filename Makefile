@@ -10,14 +10,15 @@ PKG_CONFIG	?= pkg-config
 VERSION		:= 1.2.0
 CFLAGS		:= -std=gnu99 -D_GNU_SOURCE -Os
 CFLAGS		+= -DVERSION=\"$(VERSION)\"
-CFLAGS		+= -Wall -Wextra -Werror=implicit-function-declaration
+CFLAGS		+= -Wall -Wextra -Werror=implicit-function-declaration -Wunused-result
 CFLAGS		+= -ffunction-sections -fdata-sections
 CFLAGS		+= $(shell $(PKG_CONFIG) --cflags libevdev)
 LDFLAGS		:= -Wl,--gc-sections -s
 
 CRSF_OBJS	:= joycrsf.o
 
-.PHONY: all clean
+DESTDIR		?= /usr
+.PHONY: all clean install
 
 all: crsf_rx crsf_tx joystick
 

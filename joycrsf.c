@@ -33,9 +33,12 @@ int crsf_serial_open(const char* port_name, struct sp_port** port, int mode, int
         fprintf(stderr, "Error: cannot set baudrate %d on %s\n", baudrate, port_name);
         syslog(LOG_ERR, "failed to set baudrate %d on %s", baudrate, port_name);
     }
-    sp_set_parity(*port, SP_PARITY_NONE);
-    sp_set_bits(*port, 8);
-    sp_set_stopbits(*port, 1);
+    if (sp_set_parity(*port, SP_PARITY_NONE) != SP_OK)
+        syslog(LOG_WARNING, "cannot set parity on %s", port_name);
+    if (sp_set_bits(*port, 8) != SP_OK)
+        syslog(LOG_WARNING, "cannot set 8 bits on %s", port_name);
+    if (sp_set_stopbits(*port, 1) != SP_OK)
+        syslog(LOG_WARNING, "cannot set 1 stop bit on %s", port_name);
     return 0;
 }
 
@@ -49,7 +52,7 @@ void crsf_serial_close(struct sp_port* port) {
 // --- Common utilities ---
 
 void crsf_print_channels(const uint16_t* channels, int count) {
-    char buf[128];
+    char buf[256];
     int pos = 0;
     for (int i = 0; i < count && pos < (int)sizeof(buf) - 10; i++) {
         if (i > 0 && i % 8 == 0) {

@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
+#include <poll.h>
 #include <sys/ioctl.h>
 #include <linux/input.h>
 #include <libserialport.h>
@@ -129,7 +130,10 @@ int main(int argc, char** argv) {
         closelog();
         return 1;
     }
-    libevdev_grab(dev, LIBEVDEV_GRAB);
+    /* NOTE: libevdev_grab is intentionally NOT called here.
+       Grabbing can block other users and may interfere with non-blocking
+       reads on some kernel/evdev combinations.  We keep the fd non-blocking
+       and handle -EAGAIN gracefully instead. */
 
     /* --- Open serial port (optional) --- */
     struct sp_port* port = NULL;
@@ -172,14 +176,37 @@ int main(int argc, char** argv) {
     uint16_t channels[CRSF_NUM_CHANNELS] = {992, 992, 992, 992, 992, 992, 992, 992,
                                             992, 992, 992, 992, 992, 992, 992, 992};
     uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
-    unsigned int loop_count = 0;
+    struct pollfd pfd = { .fd = fd, .events = POLLIN };
+    unsigned int heartbeat_ms = 500;
+    int poll_rc;
+
+    if (debug_mode)
+        fflush(stdout);
 
     while (!stop_flag) {
-        rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
-        if (rc == -EAGAIN) {
-            /* No events available in non-blocking mode — this is normal. */
+        /* Use poll() with a timeout so we never block indefinitely,
+           and can show a heartbeat even when no events arrive. */
+        poll_rc = poll(&pfd, 1, heartbeat_ms);
+        if (poll_rc < 0) {
+            if (errno == EINTR) continue;
+            syslog(LOG_ERR, "poll error: %s", strerror(errno));
+            break;
         }
-        else if (rc == LIBEVDEV_READ_STATUS_SUCCESS) {
+        if (poll_rc == 0) {
+            /* Timeout — show heartbeat. */
+            if (debug_mode) {
+                printf("\rState | Axes: 0:%-4d 1:%-4d 2:%-4d 3:%-4d 4:%-4d 5:%-4d 6:%-4d 7:%-4d | "
+                       "Btns: 8:%-4d 9:%-4d 10:%-4d 11:%-4d  \n",
+                       channels[0], channels[1], channels[2], channels[3],
+                       channels[4], channels[5], channels[6], channels[7],
+                       channels[8], channels[9], channels[10], channels[11]);
+                fflush(stdout);
+            }
+            continue;
+        }
+
+        /* Drain all pending events without blocking. */
+        while ((rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev)) == LIBEVDEV_READ_STATUS_SUCCESS) {
             if (ev.type == EV_ABS) {
                 int crsf_val = axis_to_crsf(ev.value);
 
@@ -216,7 +243,7 @@ int main(int argc, char** argv) {
                        ev.type, ev.code, ev.value);
             }
 
-            /* Send CRSF frame via serial port if available. */
+            /* Send CRSF frame via serial port after every event. */
             if (port) {
                 crsf_generate_rc_packet(packet, channels);
                 int wret = sp_blocking_write(port, packet, CRSF_TOTAL_FRAME_SIZE, 10);
@@ -225,26 +252,21 @@ int main(int argc, char** argv) {
                 }
             }
         }
-        else if (rc == LIBEVDEV_READ_STATUS_SYNC) {
+
+        /* Handle sync events (device reconnected). */
+        if (rc == LIBEVDEV_READ_STATUS_SYNC) {
+            syslog(LOG_WARNING, "joystick sync event");
             while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_SYNC, &ev)
                    == LIBEVDEV_READ_STATUS_SUCCESS)
                 ;
-            syslog(LOG_WARNING, "joystick sync event handled");
         }
-        else if (debug_mode) {
+        else if (rc == -EAGAIN) {
+            /* No more events — will go back to poll(). */
+        }
+        else if (rc < 0 && debug_mode) {
             printf("libevdev: rc=%d (%s)\n", rc, strerror(-rc));
-        }
-
-        /* Heartbeat — show current state every ~1000 iterations (~1 sec). */
-        if (debug_mode && (++loop_count % 1000 == 0)) {
-            printf("\rState | Axes: 0:%-4d 1:%-4d 2:%-4d 3:%-4d 4:%-4d 5:%-4d 6:%-4d 7:%-4d | "
-                   "Btns: 8:%-4d 9:%-4d 10:%-4d 11:%-4d  \n",
-                   channels[0], channels[1], channels[2], channels[3],
-                   channels[4], channels[5], channels[6], channels[7],
-                   channels[8], channels[9], channels[10], channels[11]);
             fflush(stdout);
         }
-        usleep(1000);
     }
 
     syslog(LOG_INFO, "shutting down");

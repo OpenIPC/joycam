@@ -2,12 +2,12 @@
  *
  * Copyright (c) OpenIPC  https://openipc.org  The Prosperity Public License 3.0.0
  *
- * joycrsf.h — CRSF protocol definitions, constants, structures
+ * joycam.h — CRSF and IBUS protocol definitions, constants, structures
  *
  */
 
-#ifndef JOYCRSF_H
-#define JOYCRSF_H
+#ifndef JOYCAM_H
+#define JOYCAM_H
 
 #include <stdint.h>
 #include <stdio.h>
@@ -20,9 +20,25 @@
 #define CRSF_PAYLOAD_SIZE 22
 /* sync(1) + len(1) + type(1) + payload(CRSF_PAYLOAD_SIZE) + crc(1) */
 #define CRSF_TOTAL_FRAME_SIZE (3 + CRSF_PAYLOAD_SIZE + 1)
+#define CRSF_BAUDRATE 420000
+#define CRSF_CHANNEL_MIN 172
+#define CRSF_CHANNEL_MAX 1811
+#define CRSF_CHANNEL_MID 992
 
-// --- Packet Structure ---
+// --- IBUS Protocol Constants ---
+#define IBUS_SYNC1 0x20
+#define IBUS_SYNC2 0x40
+#define IBUS_NUM_CHANNELS 14
+#define IBUS_PACKET_SIZE 32
+/* header(2) + channels(28) + checksum(2) */
+#define IBUS_BAUDRATE 115200
+#define IBUS_CHANNEL_MIN 1000
+#define IBUS_CHANNEL_MAX 2000
+#define IBUS_CHANNEL_MID 1500
+
+// --- Packet Structures ---
 #pragma pack(push, 1)
+
 typedef struct {
     uint8_t sync;   // 0xC8
     uint8_t len;    // total length = type + payload + crc
@@ -43,6 +59,11 @@ typedef struct {
     uint8_t rf_power;
     uint8_t quality;
 } crsf_link_stats_t;
+
+typedef struct {
+    uint16_t channels[IBUS_NUM_CHANNELS];
+} ibus_channels_t;
+
 #pragma pack(pop)
 
 // --- Serial port helpers ---
@@ -58,11 +79,20 @@ int  crsf_write(crsf_handle_t* h, const void* buf, size_t len, int timeout_ms);
 // --- Common utilities ---
 void crsf_print_channels(const uint16_t* channels, int count);
 void crsf_hex_dump(const uint8_t* data, int len, const char* label);
+int  axis_to_crsf(int value, int min, int max);
+int  axis_to_range(int value, int min, int max, int out_min, int out_max);
+int  button_to_channel(int code);
 
-// --- Protocol functions ---
-int crsf_validate_packet(crsf_packet_t* packet);
-int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats_t* out_stats);
-void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels);
+// --- CRSF protocol functions ---
+int     crsf_validate_packet(crsf_packet_t* packet);
+int     crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels,
+                        crsf_link_stats_t* out_stats);
+void    crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels);
 uint8_t crsf_crc8(const uint8_t* data, uint16_t len);
 
-#endif // JOYCRSF_H
+// --- IBUS protocol functions ---
+uint16_t ibus_checksum(const uint8_t* data, int len);
+void     ibus_generate_packet(uint8_t* buffer, const uint16_t* channels);
+int      ibus_parse_byte(uint8_t data, ibus_channels_t* out_channels);
+
+#endif // JOYCAM_H

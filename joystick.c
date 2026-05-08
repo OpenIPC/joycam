@@ -2,14 +2,16 @@
  *
  * Copyright (c) OpenIPC  https://openipc.org  The Prosperity Public License 3.0.0
  *
- * joystick.c — USB joystick reader via evdev with CRSF output
+ * joystick.c — USB joystick reader via evdev with CRSF/IBUS output
  *
  * Modes (debug_mode = status line only, verbose = raw events):
  *   debug            ./joystick <evdev>              — status line only
  *   verbose          ./joystick <evdev> -v           — raw event spam
- *   transmit         ./joystick <evdev> <serial>     — silent CRSF tx
- *   tx+status        ./joystick <evdev> <serial> -d  — CRSF + status line
- *   tx+verbose       ./joystick <evdev> <serial> -v  — CRSF + raw events
+ *   transmit         ./joystick <evdev> <serial>     — silent tx
+ *   tx+status        ./joystick <evdev> <serial> -d  — tx + status line
+ *   tx+verbose       ./joystick <evdev> <serial> -v  — tx + raw events
+ *
+ * Protocol: -p crsf (default, 420000 baud) | -p ibus (115200 baud)
  *
  */
 
@@ -24,7 +26,7 @@
 #include <sys/ioctl.h>
 #include <poll.h>
 #include <linux/input.h>
-#include "joycrsf.h"
+#include "joycam.h"
 
 static volatile sig_atomic_t stop_flag = 0;
 
@@ -33,37 +35,22 @@ static void handle_signal(int sig) {
     stop_flag = 1;
 }
 
-/* Map evdev axis value to CRSF range (172..1811) using integer arithmetic. */
-static int axis_to_crsf(int value, int min, int max) {
-    if (min == max) return 992;
-    const int crsf_min = 172, crsf_max = 1811;
-    int64_t v = value - min;
-    int64_t d = max - min;
-    if (v < 0) v = 0;
-    if (v > d) v = d;
-    return (int)(crsf_min + (v * (crsf_max - crsf_min) + d / 2) / d);
-}
-
-/* Map button code 304-315 (BTN_SOUTH..BTN_THUMBR) to CRSF channel offset. */
-static int button_to_channel(int code) {
-    if (code >= 304 && code <= 315)
-        return code - 304 + 8;  /* 304->ch8, 305->ch9, ..., 315->ch19 */
-    return -1;  /* unmapped */
-}
+/* axis_to_crsf and button_to_channel are now in joycam.c */
 
 static void print_help(const char* prog) {
     printf("Joystick reader v%s\n", VERSION);
     printf("Usage:\n");
-    printf("  %s <evdev_path>                — status line only\n", prog);
-    printf("  %s <evdev_path> -v             — verbose (raw events)\n", prog);
-    printf("  %s <evdev_path> <serial_port>  — transmit CRSF (silent)\n", prog);
-    printf("  %s <evdev_path> <serial> -d    — transmit + status line\n", prog);
-    printf("  %s <evdev_path> <serial> -v    — transmit + raw events\n", prog);
-    printf("  %s -h / --help                 — this help\n", prog);
-    printf("  %s -V / --version              — show version\n", prog);
+    printf("  %s <evdev_path>                    — status line only\n", prog);
+    printf("  %s <evdev_path> -v                 — verbose (raw events)\n", prog);
+    printf("  %s <evdev_path> <serial_port> [-p crsf|ibus]  — transmit (silent)\n", prog);
+    printf("  %s <evdev_path> <serial> -d [-p crsf|ibus]    — transmit + status line\n", prog);
+    printf("  %s <evdev_path> <serial> -v [-p crsf|ibus]    — transmit + raw events\n", prog);
+    printf("  %s -h / --help                     — this help\n", prog);
+    printf("  %s -V / --version                  — show version\n", prog);
     printf("\nFlags:\n");
-    printf("  -d, --debug   show compact status line every frame\n");
-    printf("  -v, --verbose show every axis and button event\n");
+    printf("  -d, --debug         show compact status line every frame\n");
+    printf("  -v, --verbose       show every axis and button event\n");
+    printf("  -p, --protocol <p>  output protocol: crsf (default) or ibus\n");
     printf("\nDefault evdev path: /dev/input/by-id/usb-...-event-joystick\n");
     printf("Find your device:  ls -l /dev/input/by-id/*-joystick\n");
 }
@@ -73,6 +60,7 @@ int main(int argc, char** argv) {
     const char* serial_port  = NULL;
     int         debug_mode   = 0;
     int         verbose_mode = 0;
+    int         use_ibus     = 0;
 
     /* --- Parse arguments --- */
     for (int i = 1; i < argc; i++) {
@@ -90,6 +78,17 @@ int main(int argc, char** argv) {
         }
         if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             verbose_mode = 1;
+            continue;
+        }
+        if ((strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--protocol") == 0)
+            && i + 1 < argc) {
+            i++;
+            if (strcmp(argv[i], "ibus") == 0)
+                use_ibus = 1;
+            else if (strcmp(argv[i], "crsf") != 0) {
+                fprintf(stderr, "Error: unknown protocol '%s'. Use crsf or ibus.\n", argv[i]);
+                return 1;
+            }
             continue;
         }
         if (argv[i][0] != '-') {
@@ -150,8 +149,9 @@ int main(int argc, char** argv) {
     ioctl(fd, EVIOCGPHYS(sizeof(dev_phys)), dev_phys);
 
     /* --- Open serial port (optional) --- */
+    int baudrate = use_ibus ? IBUS_BAUDRATE : CRSF_BAUDRATE;
     crsf_handle_t h = {-1};
-    if (serial_port && crsf_serial_open(serial_port, &h, O_WRONLY, 420000) < 0) {
+    if (serial_port && crsf_serial_open(serial_port, &h, O_WRONLY, baudrate) < 0) {
         close(fd);
         closelog();
         return 1;
@@ -163,7 +163,8 @@ int main(int argc, char** argv) {
                dev_name[0] ? dev_name : "(unknown)",
                dev_phys[0] ? dev_phys : "");
         if (h.fd >= 0)
-            printf("  CRSF output on %s\n", serial_port);
+            printf("  %s output on %s (%d baud)\n",
+                   use_ibus ? "IBUS" : "CRSF", serial_port, baudrate);
         else
             printf("  (no serial port)\n");
         fflush(stdout);
@@ -178,9 +179,15 @@ int main(int argc, char** argv) {
 
     /* --- Main loop --- */
     struct input_event ev;
-    uint16_t channels[CRSF_NUM_CHANNELS] = {992, 992, 992, 992, 992, 992, 992, 992,
-                                            992, 992, 992, 992, 992, 992, 992, 992};
-    uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
+    int num_channels = use_ibus ? IBUS_NUM_CHANNELS : CRSF_NUM_CHANNELS;
+    int crsf_mid     = use_ibus ? IBUS_CHANNEL_MID : CRSF_CHANNEL_MID;
+    int crsf_min     = use_ibus ? IBUS_CHANNEL_MIN : CRSF_CHANNEL_MIN;
+    int crsf_max     = use_ibus ? IBUS_CHANNEL_MAX : CRSF_CHANNEL_MAX;
+    int packet_size  = use_ibus ? IBUS_PACKET_SIZE : CRSF_TOTAL_FRAME_SIZE;
+    uint16_t channels[CRSF_NUM_CHANNELS];
+    for (int i = 0; i < CRSF_NUM_CHANNELS; i++)
+        channels[i] = crsf_mid;
+    uint8_t packet[32];  /* max(CRSF_TOTAL_FRAME_SIZE, IBUS_PACKET_SIZE) */
 
     while (!stop_flag) {
         struct pollfd pfd = { .fd = fd, .events = POLLIN };
@@ -216,51 +223,60 @@ int main(int argc, char** argv) {
                 min = abs.minimum;
                 max = abs.maximum;
             }
-            int crsf_val = axis_to_crsf(ev.value, min, max);
+            int ch_val = use_ibus
+                ? axis_to_range(ev.value, min, max,
+                                IBUS_CHANNEL_MIN, IBUS_CHANNEL_MAX)
+                : axis_to_crsf(ev.value, min, max);
 
-            if (ev.code == 0) channels[0] = crsf_val;
-            else if (ev.code == 1) channels[1] = crsf_val;
-            else if (ev.code == 2) channels[2] = crsf_val;
-            else if (ev.code == 5) channels[3] = crsf_val;
-            else if (ev.code == 9) channels[4] = crsf_val;
-            else if (ev.code == 10) channels[5] = crsf_val;
-            else if (ev.code == 16) channels[6] = crsf_val;
-            else if (ev.code == 17) channels[7] = crsf_val;
+            if (ev.code == 0) channels[0] = ch_val;
+            else if (ev.code == 1) channels[1] = ch_val;
+            else if (ev.code == 2) channels[2] = ch_val;
+            else if (ev.code == 5) channels[3] = ch_val;
+            else if (ev.code == 9) channels[4] = ch_val;
+            else if (ev.code == 10) channels[5] = ch_val;
+            else if (ev.code == 16) channels[6] = ch_val;
+            else if (ev.code == 17) channels[7] = ch_val;
 
             if (verbose_mode) {
-                printf("Axis %d: val %d [%d..%d] -> CRSF %d\n",
-                       ev.code, ev.value, min, max, crsf_val);
+                printf("Axis %d: val %d [%d..%d] -> %s %d\n",
+                       ev.code, ev.value, min, max,
+                       use_ibus ? "IBUS" : "CRSF", ch_val);
                 fflush(stdout);
             }
         }
         else if (ev.type == EV_KEY && ev.value != 2) {
             int ch = button_to_channel(ev.code);
             if (ch >= 0 && ch < CRSF_NUM_CHANNELS)
-                channels[ch] = ev.value ? 1811 : 172;
+                channels[ch] = ev.value ? crsf_max : crsf_min;
 
             if (verbose_mode) {
-                printf("Button %d %s -> ch%d\n",
-                       ev.code, ev.value ? "pressed" : "released", ch);
+                printf("Button %d %s -> ch%d (%s)\n",
+                       ev.code, ev.value ? "pressed" : "released",
+                       ch, use_ibus ? "IBUS" : "CRSF");
                 fflush(stdout);
             }
         }
         else if (ev.type == EV_SYN) {
-            /* Status line — all 16 channels. */
+            /* Status line — all channels. */
             if (debug_mode) {
                 printf("CH ");
-                crsf_print_channels(channels, CRSF_NUM_CHANNELS);
+                crsf_print_channels(channels, num_channels);
                 printf("\n");
                 fflush(stdout);
             }
 
-            /* Send CRSF frame or HEX dump. */
-            crsf_generate_rc_packet(packet, channels);
+            /* Generate and send protocol frame. */
+            if (use_ibus)
+                ibus_generate_packet(packet, channels);
+            else
+                crsf_generate_rc_packet(packet, channels);
             if (h.fd >= 0) {
-                int wret = crsf_write(&h, packet, CRSF_TOTAL_FRAME_SIZE, 10);
+                int wret = crsf_write(&h, packet, packet_size, 10);
                 if (wret < 0)
                     syslog(LOG_ERR, "write error on serial port");
             } else if (verbose_mode) {
-                crsf_hex_dump(packet, CRSF_TOTAL_FRAME_SIZE, "CRSF");
+                crsf_hex_dump(packet, packet_size,
+                              use_ibus ? "IBUS" : "CRSF");
             }
         }
     }

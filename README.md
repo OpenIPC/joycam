@@ -188,4 +188,4 @@ Channels: 0:988 1:1020 2:1700 3:1500
 
 ## License
 
-Copyright (c) OpenIPC  https://openipc.org  MIT License
+Copyright (c) OpenIPC  https://openipc.org  Prosperity Public License 3.0.0

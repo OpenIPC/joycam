@@ -21,14 +21,14 @@ all: crsf_rx crsf_tx joystick
 
 # --- CRSF receiver ---
 crsf_rx: crsf_rx.o $(CRSF_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lserialport
+	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport)
 
 crsf_rx.o: crsf_rx.c crsf_driver.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # --- CRSF transmitter ---
 crsf_tx: crsf_tx.o $(CRSF_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lserialport
+	$(CC) $(LDFLAGS) -o $@ $^ $(shell $(PKG_CONFIG) --libs libserialport)
 
 crsf_tx.o: crsf_tx.c crsf_driver.h
 	$(CC) $(CFLAGS) -c -o $@ $<

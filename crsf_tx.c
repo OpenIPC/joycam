@@ -52,7 +52,10 @@ int main(int argc, char** argv) {
     sp_set_bits(port, 8);
     sp_set_stopbits(port, 1);
 
+    /* 27 = CRSF_SYNC_BYTE(1) + type(1) + payload_len(1) + payload(22) + crc(1)
+       or equivalently: sizeof(uint8_t)*3 + sizeof(payload) */
     uint8_t packet[27];
+#define CRSF_RC_PACKET_SIZE (3 + 22) /* sync + len + type + payload(22) + crc */
     uint16_t channels[16] = {992, 992, 992, 992}; // Midpoints
 
     printf("Sending CRSF frames to %s...\n", argv[1]);
@@ -69,7 +72,7 @@ int main(int argc, char** argv) {
         if (val <= 172) { val = 172; direction = -direction; }
 
         crsf_generate_rc_packet(packet, channels);
-        sp_blocking_write(port, packet, 27, 100);
+        sp_blocking_write(port, packet, CRSF_RC_PACKET_SIZE, 100);
         usleep(10000); // 100Hz
     }
 

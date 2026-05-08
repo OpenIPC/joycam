@@ -67,21 +67,25 @@ int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats
     if (rx_index >= (rx_packet.len + 2)) {
         // Packet complete - validate CRC
         if (!crsf_validate_packet(&rx_packet)) {
-            goto reset_and_error;
+            rx_index = 0;
+            have_sync = 0;
+            return -1; // CRC Error
         }
 
         // RC Channels Packet
         if (rx_packet.type == CRSF_FRAMETYPE_RC_CHANNELS_PACKED) {
             const uint8_t* payload = rx_packet.payload;
             for (int i = 0; i < CRSF_NUM_CHANNELS; i++) {
-                out_channels->channels[i] = 0;
-                if ((i * 11) / 8 < 21) {
-                    uint32_t offset = (i * 11) / 8;
-                    out_channels->channels[i] = (payload[offset] |
-                                                 (payload[offset + 1] << 8) |
-                                                 (payload[offset + 2] << 16)) &
-                                                ((1 << 11) - 1);
-                }
+                uint32_t offset = (i * 11) / 8;
+                uint8_t  shift  = (i * 11) % 8;
+                uint32_t raw;
+                /* Most channels span 3 bytes; channel 15 fits in 2. */
+                if (offset + 2 < 22)
+                    raw = payload[offset] | (payload[offset + 1] << 8)
+                                           | (payload[offset + 2] << 16);
+                else
+                    raw = payload[offset] | (payload[offset + 1] << 8);
+                out_channels->channels[i] = (raw >> shift) & 0x7FF;
             }
             rx_index = 0;
             have_sync = 0;
@@ -101,21 +105,19 @@ int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats
         return 0;
     }
     return 0;
-
-reset_and_error:
-    rx_index = 0;
-    have_sync = 0;
-    return -1; // CRC Error
 }
 
 void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels) {
     uint8_t payload[22] = {0};
     for (int i = 0; i < CRSF_NUM_CHANNELS; i++) {
         uint32_t offset = (i * 11) / 8;
-        uint32_t bitmask = channels[i] & ((1 << 11) - 1);
-        payload[offset] |= (bitmask << ((i * 11) % 8)) & 0xFF;
-        payload[offset + 1] |= (bitmask >> (8 - ((i * 11) % 8))) & 0xFF;
-        payload[offset + 2] |= (bitmask >> (16 - ((i * 11) % 8))) & 0xFF;
+        uint8_t  shift  = (i * 11) % 8;
+        uint32_t bitmask = channels[i] & 0x7FF;
+        payload[offset]     |= (bitmask << shift) & 0xFF;
+        payload[offset + 1] |= (bitmask >> (8 - shift)) & 0xFF;
+        /* Channel 15 needs only 2 bytes; guard against OOB write. */
+        if (offset + 2 < 22)
+            payload[offset + 2] |= (bitmask >> (16 - shift)) & 0xFF;
     }
 
     buffer[0] = CRSF_SYNC_BYTE;

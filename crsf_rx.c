@@ -78,8 +78,8 @@ int main(int argc, char** argv) {
         else if (ret == 2) {
             printf("Link Quality: %d%%  RSSI1: %d RSSI2: %d Power: %d\n",
                    stats.quality, stats.rssi_1, stats.rssi_2, stats.rf_power);
-            syslog(LOG_INFO, "LQ %d%% RSSI1 %d RSSI2 %d",
-                   stats.quality, stats.rssi_1, stats.rssi_2);
+            syslog(LOG_INFO, "LQ %d%% RSSI1 %d RSSI2 %d PWR %d",
+                   stats.quality, stats.rssi_1, stats.rssi_2, stats.rf_power);
         }
         else if (ret == -1) {
             printf("CRC Error\n");

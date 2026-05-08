@@ -126,15 +126,7 @@ You should see channels and link statistics appearing on the receiver side.
 ### Full chain: joystick → receiver (loopback)
 
 `joystick` can read from evdev **and** write CRSF frames directly to a serial
-port. Five operating modes are available:
-
-| Mode | Command | Behaviour |
-|------|---------|-----------|
-| Status line | `./joystick <evdev>` | Show all 16 channels every frame |
-| Verbose | `./joystick <evdev> -v` | Every axis/button event + CRSF HEX dump |
-| Transmit | `./joystick <evdev> <serial>` | Send CRSF frames silently |
-| Tx + status | `./joystick <evdev> <serial> -d` | Send + status line |
-| Tx + verbose | `./joystick <evdev> <serial> -v` | Send + raw events |
+port. Five operating modes are available (see table above).
 
 Example loopback test using a virtual serial port:
 
@@ -165,10 +157,37 @@ Channels: 0:172  1:992  2:1811  3:992  4:992  5:992  6:992  7:992   | 8:992  9:9
 Channels: 0:988  1:1020  2:1700  3:1500  4:992  5:992  6:992  7:992   | 8:992  9:992  10:992  11:992  12:992  13:992  14:992  15:992
 ```
 
-**Axis mapping:** axes are mapped by evdev code (0→LX, 1→LY, 2→RX, 5→RY,
-9→LT, 10→D-pad X, 16→D-pad Y, 17→extra).  
-**Button mapping:** BTN_SOUTH(304)→ch8, BTN_EAST(305)→ch9, ... BTN_TL2(315)→ch19.
-Unmapped buttons are ignored.
+### Axis mapping
+
+| evdev code | Meaning | CRSF channel |
+|-----------:|---------|:------------:|
+| 0 | Left stick X (LX) | ch0 |
+| 1 | Left stick Y (LY) | ch1 |
+| 2 | Right stick X (RX) | ch2 |
+| 5 | Right stick Y (RY) | ch3 |
+| 9 | Left trigger (LT) | ch4 |
+| 10 | D-pad X axis | ch5 |
+| 16 | D-pad Y axis | ch6 |
+| 17 | Extra axis | ch7 |
+
+### Button mapping
+
+| evdev code | Linux name | CRSF channel |
+|-----------:|------------|:------------:|
+| 304 | `BTN_SOUTH` (A / cross) | ch8 |
+| 305 | `BTN_EAST` (B / circle) | ch9 |
+| 306 | `BTN_NORTH` (X / triangle) | ch10 |
+| 307 | `BTN_WEST` (Y / square) | ch11 |
+| 308 | `BTN_TL` (left bumper) | ch12 |
+| 309 | `BTN_TR` (right bumper) | ch13 |
+| 310 | `BTN_TL2` (left trigger) | ch14 |
+| 311 | `BTN_TR2` (right trigger) | ch15 |
+| 312 | `BTN_SELECT` (back) | ch16 |
+| 313 | `BTN_START` (start) | ch17 |
+| 314 | `BTN_THUMBL` (left stick click) | ch18 |
+| 315 | `BTN_THUMBR` (right stick click) | ch19 |
+
+All other buttons are ignored.
 
 ## Project structure
 

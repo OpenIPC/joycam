@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <syslog.h>
 #include <errno.h>
+#include <stdint.h>
 #include <sys/ioctl.h>
 #include <poll.h>
 #include <linux/input.h>

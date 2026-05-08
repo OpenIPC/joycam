@@ -23,6 +23,7 @@ Sending CRSF frames to /tmp/ttyV0... sweep on ch0
 ## Joystic CRSF
 
 ```
+./joystick -p crsf -d /dev/input/by-id/usb-shanwan_Android_GamePad-event-joystick /tmp/ttyV0
 ```
 
 
@@ -44,4 +45,5 @@ Sending IBUS frames to /tmp/ttyV0... sweep on ch0
 # Joystic IBUS
 
 ```
+./joystick -p ibus -d /dev/input/by-id/usb-shanwan_Android_GamePad-event-joystick /tmp/ttyV0
 ```

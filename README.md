@@ -44,7 +44,7 @@ Three binaries are produced: `crsf_rx`, `crsf_tx`, `joystick`.
 ### Receive CRSF data
 
 ```bash
-./crsf_rx /dev/ttyUSB0
+./crsf_rx /dev/ttyUSB0 [-d]
 ```
 
 Output:
@@ -55,16 +55,19 @@ Channels: 0:992 1:1020 2:988 3:1700 4:992 5:992 6:992 7:992 8:992 9:992 10:992 1
 Link Quality: 99%  RSSI1: -45 RSSI2: -48 Power: 100
 ```
 
+Use `-d` to hex dump every raw CRSF frame alongside the decoded channels.
+
 On OpenIPC cameras the ELRS receiver is typically connected to the camera's
 UART1 or UART2 (e.g. `/dev/ttyAMA1`).
 
 ### Transmit test frames
 
 ```bash
-./crsf_tx /dev/ttyACM0
+./crsf_tx /dev/ttyACM0 [-a <ch>]
 ```
 
-Sends RC channel frames at 100 Hz. Channel 0 sweeps from 172 to 1811.
+Sends RC channel frames at 100 Hz. Channel 0 sweeps from 172 to 1811 by default.
+Use `-a <ch>` to sweep a different channel (0–15).
 
 ### Read joystick / full-chain CRSF bridge
 

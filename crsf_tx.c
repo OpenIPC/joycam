@@ -7,6 +7,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
@@ -22,29 +23,46 @@ static void handle_signal(int sig) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <serial_port>\n", argv[0]);
-        fprintf(stderr, "       %s --help\n", argv[0]);
-        fprintf(stderr, "       %s --version\n", argv[0]);
-        return 1;
-    }
+    const char* serial_port = NULL;
+    int sweep_ch = 0;
 
-    if (argc == 2) {
-        if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             printf("CRSF transmitter v%s\n", VERSION);
-            printf("Usage: %s <serial_port>\n", argv[0]);
+            printf("Usage: %s <serial_port> [-a <ch>]\n", argv[0]);
             printf("  Generates CRSF RC channel packets at 100 Hz\n");
-            printf("  with a sawtooth sweep on channel 0.\n");
+            printf("  with a sawtooth sweep on a selected channel.\n");
+            printf("\nOptions:\n");
+            printf("  -a <ch>   channel to sweep (default: 0)\n");
             return 0;
         }
-        if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0) {
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
             printf("crsf_tx v%s\n", VERSION);
             return 0;
         }
+        if (strcmp(argv[i], "-a") == 0 && i + 1 < argc) {
+            sweep_ch = atoi(argv[++i]);
+            continue;
+        }
+        if (argv[i][0] != '-' && !serial_port) {
+            serial_port = argv[i];
+        }
+    }
+
+    if (!serial_port) {
+        fprintf(stderr, "Usage: %s <serial_port> [-a <ch>]\n", argv[0]);
+        fprintf(stderr, "       %s --help\n", argv[0]);
+        return 1;
+    }
+
+    if (sweep_ch < 0 || sweep_ch >= CRSF_NUM_CHANNELS) {
+        fprintf(stderr, "Error: channel %d out of range (0..%d)\n",
+                sweep_ch, CRSF_NUM_CHANNELS - 1);
+        return 1;
     }
 
     openlog("crsf_tx", LOG_PID | LOG_CONS, LOG_DAEMON);
-    syslog(LOG_INFO, "starting on %s", argv[1]);
+    syslog(LOG_INFO, "starting on %s ch=%d", serial_port, sweep_ch);
 
     {   struct sigaction sa;
         sigemptyset(&sa.sa_mask);
@@ -56,7 +74,7 @@ int main(int argc, char** argv) {
     signal(SIGPIPE, SIG_IGN);
 
     crsf_handle_t h = {-1};
-    if (crsf_serial_open(argv[1], &h, O_WRONLY, 420000) < 0) {
+    if (crsf_serial_open(serial_port, &h, O_WRONLY, 420000) < 0) {
         closelog();
         return 1;
     }
@@ -67,15 +85,15 @@ int main(int argc, char** argv) {
     uint16_t channels[CRSF_NUM_CHANNELS] = {992, 992, 992, 992, 992, 992, 992, 992,
                                             992, 992, 992, 992, 992, 992, 992, 992};
 
-    printf("Sending CRSF frames to %s...\n", argv[1]);
-    syslog(LOG_INFO, "sending on %s", argv[1]);
+    printf("Sending CRSF frames to %s... sweep on ch%d\n", serial_port, sweep_ch);
+    syslog(LOG_INFO, "sending on %s ch=%d", serial_port, sweep_ch);
 
     uint16_t val = 172;
     int direction = 1;
 
     while (!stop_flag) {
         // Simple servo test: sweep from min to max
-        channels[0] = val;
+        channels[sweep_ch] = val;
         val += direction * 10;
         if (val >= 1811) { val = 1811; direction = -direction; }
         if (val <= 172) { val = 172; direction = -direction; }

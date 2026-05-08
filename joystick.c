@@ -44,13 +44,10 @@ static int axis_to_crsf(int value, int min, int max) {
     return (int)(crsf_min + (v * (crsf_max - crsf_min) + d / 2) / d);
 }
 
-/* Map button code 304-315 (BTN_SOUTH..BTN_TL2) to CRSF channel offset. */
+/* Map button code 304-315 (BTN_SOUTH..BTN_THUMBR) to CRSF channel offset. */
 static int button_to_channel(int code) {
     if (code >= 304 && code <= 315)
         return code - 304 + 8;  /* 304->ch8, 305->ch9, ..., 315->ch19 */
-    /* legacy codes 0/1 for very old joysticks */
-    if (code == 0) return 8;
-    if (code == 1) return 9;
     return -1;  /* unmapped */
 }
 
@@ -174,7 +171,10 @@ int main(int argc, char** argv) {
     syslog(LOG_INFO, "started evdev=%s", device_path);
 
     /* Grab the device so events don't get stolen. */
-    ioctl(fd, EVIOCGRAB, 1);
+    if (ioctl(fd, EVIOCGRAB, 1) < 0) {
+        fprintf(stderr, "Warning: EVIOCGRAB failed: %s\n", strerror(errno));
+        syslog(LOG_WARNING, "EVIOCGRAB failed on %s: %s", device_path, strerror(errno));
+    }
 
     /* --- Main loop --- */
     struct input_event ev;

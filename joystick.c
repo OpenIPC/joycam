@@ -40,17 +40,17 @@ static void handle_signal(int sig) {
 static void print_help(const char* prog) {
     printf("Joystick reader v%s\n", VERSION);
     printf("Usage:\n");
-    printf("  %s <evdev_path>                    — status line only\n", prog);
-    printf("  %s <evdev_path> -v                 — verbose (raw events)\n", prog);
-    printf("  %s <evdev_path> <serial_port> [-p crsf|ibus]  — transmit (silent)\n", prog);
-    printf("  %s <evdev_path> <serial> -d [-p crsf|ibus]    — transmit + status line\n", prog);
-    printf("  %s <evdev_path> <serial> -v [-p crsf|ibus]    — transmit + raw events\n", prog);
+    printf("  %s -p crsf|ibus <evdev_path>                    — status line only\n", prog);
+    printf("  %s -p crsf|ibus <evdev_path> -v                 — verbose (raw events)\n", prog);
+    printf("  %s -p crsf|ibus <evdev_path> <serial_port>      — transmit (silent)\n", prog);
+    printf("  %s -p crsf|ibus <evdev_path> <serial> -d        — transmit + status line\n", prog);
+    printf("  %s -p crsf|ibus <evdev_path> <serial> -v        — transmit + raw events\n", prog);
     printf("  %s -h / --help                     — this help\n", prog);
     printf("  %s -V / --version                  — show version\n", prog);
     printf("\nFlags:\n");
     printf("  -d, --debug         show compact status line every frame\n");
     printf("  -v, --verbose       show every axis and button event\n");
-    printf("  -p, --protocol <p>  output protocol: crsf (default) or ibus\n");
+    printf("  -p, --protocol <p>  REQUIRED. Output protocol: crsf or ibus\n");
     printf("\nDefault evdev path: /dev/input/by-id/usb-...-event-joystick\n");
     printf("Find your device:  ls -l /dev/input/by-id/*-joystick\n");
 }
@@ -61,6 +61,7 @@ int main(int argc, char** argv) {
     int         debug_mode   = 0;
     int         verbose_mode = 0;
     int         use_ibus     = 0;
+    int         protocol_set = 0;
 
     /* --- Parse arguments --- */
     for (int i = 1; i < argc; i++) {
@@ -80,9 +81,13 @@ int main(int argc, char** argv) {
             verbose_mode = 1;
             continue;
         }
-        if ((strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--protocol") == 0)
-            && i + 1 < argc) {
+        if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--protocol") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: -p requires an argument (crsf or ibus).\n");
+                return 1;
+            }
             i++;
+            protocol_set = 1;
             if (strcmp(argv[i], "ibus") == 0)
                 use_ibus = 1;
             else if (strcmp(argv[i], "crsf") != 0) {
@@ -99,11 +104,17 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (!protocol_set) {
+        fprintf(stderr, "Error: -p (--protocol) is required. Use 'crsf' or 'ibus'.\n");
+        fprintf(stderr, "       %s -h for full help.\n", argv[0]);
+        return 1;
+    }
+
     if (!device_path) {
-        device_path = "/dev/input/by-id/usb-...-event-joystick";
-        printf("Usage: %s <evdev_path> [serial_port] [-d|-v]\n", argv[0]);
-        printf("  Default evdev: %s\n", device_path);
-        printf("  Find your device: ls -l /dev/input/by-id/*-joystick\n");
+        fprintf(stderr, "Error: missing evdev device path.\n");
+        fprintf(stderr, "Usage: %s -p crsf|ibus <evdev_path> [serial_port] [-d|-v]\n", argv[0]);
+        fprintf(stderr, "  Find your device: ls -l /dev/input/by-id/*-joystick\n");
+        return 1;
     }
 
     /* Resolve display mode */

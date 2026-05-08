@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) OpenIPC  https://openipc.org  MIT License
+ * Copyright (c) OpenIPC  https://openipc.org  The Prosperity Public License 3.0.0
  *
  * joycrsf.h — CRSF protocol definitions, constants, structures
  *

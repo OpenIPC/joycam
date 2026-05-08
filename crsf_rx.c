@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) OpenIPC  https://openipc.org  MIT License
+ * Copyright (c) OpenIPC  https://openipc.org  The Prosperity Public License 3.0.0
  *
  * crsf_rx.c — CRSF receiver: reads UART, parses CRSF frames, displays channels & link stats
  *

@@ -154,8 +154,7 @@ int main(int argc, char** argv) {
     struct input_event ev;
     uint16_t channels[16] = {992, 992, 992, 992, 992, 992, 992, 992,
                              992, 992, 992, 992, 992, 992, 992, 992};
-    enum { TX_PACKET_SIZE = 3 + 22 }; /* sync + len + type + payload(22) + crc */
-    uint8_t packet[TX_PACKET_SIZE];
+    uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
 
     while (!stop_flag) {
         rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
@@ -186,7 +185,10 @@ int main(int argc, char** argv) {
             /* Send CRSF frame via serial port if available. */
             if (port) {
                 crsf_generate_rc_packet(packet, channels);
-                sp_blocking_write(port, packet, TX_PACKET_SIZE, 10);
+                int wret = sp_blocking_write(port, packet, CRSF_TOTAL_FRAME_SIZE, 10);
+                if (wret < 0) {
+                    syslog(LOG_ERR, "write error on serial port");
+                }
             }
         }
         else if (rc == LIBEVDEV_READ_STATUS_SYNC) {

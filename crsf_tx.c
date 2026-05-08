@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
         closelog();
         return 1;
     }
-    if (sp_open(port, SP_MODE_READ_WRITE) != SP_OK) {
+    if (sp_open(port, SP_MODE_WRITE) != SP_OK) {
         fprintf(stderr, "Failed to open port: %s\n", argv[1]);
         syslog(LOG_ERR, "failed to open port %s", argv[1]);
         sp_free_port(port);
@@ -72,9 +72,7 @@ int main(int argc, char** argv) {
     sp_set_bits(port, 8);
     sp_set_stopbits(port, 1);
 
-    /* 27 = sync(1) + len(1) + type(1) + payload(22) + crc(1) */
-    enum { CRSF_RC_PACKET_SIZE = 3 + 22 };
-    uint8_t packet[CRSF_RC_PACKET_SIZE];
+    uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
     /* All channels initialised to mid-point (992). Never leave at 0 — some
        flight controllers treat 0 as failsafe. */
     uint16_t channels[16] = {992, 992, 992, 992, 992, 992, 992, 992,
@@ -94,7 +92,7 @@ int main(int argc, char** argv) {
         if (val <= 172) { val = 172; direction = -direction; }
 
         crsf_generate_rc_packet(packet, channels);
-        if (sp_blocking_write(port, packet, CRSF_RC_PACKET_SIZE, 100) < 0) {
+        if (sp_blocking_write(port, packet, CRSF_TOTAL_FRAME_SIZE, 100) < 0) {
             syslog(LOG_ERR, "write error on port");
             break;
         }

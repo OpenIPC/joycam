@@ -72,8 +72,8 @@ int main(int argc, char** argv) {
     sp_set_bits(port, 8);
     sp_set_stopbits(port, 1);
 
-    crsf_channels_t channels;
-    crsf_link_stats_t stats;
+    crsf_channels_t channels = {0};
+    crsf_link_stats_t stats = {0};
     uint8_t byte;
 
     printf("Listening for CRSF data on %s...\n", argv[1]);
@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
 
         if (ret == 1) {
             printf("\nChannels: ");
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < CRSF_NUM_CHANNELS; i++) {
                 printf("%d:%d ", i, channels.channels[i]);
             }
             printf("\n");

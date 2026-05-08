@@ -16,6 +16,10 @@
 #define CRSF_FRAMETYPE_RC_CHANNELS_PACKED 0x16
 #define CRSF_FRAMETYPE_LINK_STATISTICS 0x14
 #define CRSF_NUM_CHANNELS 16
+#define CRSF_PAYLOAD_SIZE 22
+#define CRSF_MAX_PAYLOAD_LEN 22
+/* sync(1) + len(1) + type(1) + payload(CRSF_PAYLOAD_SIZE) + crc(1) */
+#define CRSF_TOTAL_FRAME_SIZE (3 + CRSF_PAYLOAD_SIZE + 1)
 
 // --- Packet Structure ---
 #pragma pack(push, 1)

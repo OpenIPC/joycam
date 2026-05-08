@@ -18,7 +18,9 @@ on the camera's UART — no separate computer needed.
 | `crsf_tx` | Generates CRSF RC channel packets at 100 Hz with a sawtooth sweep on a selected channel. | ✅ |
 | `ibus_rx` | Reads IBUS (FlySky) frames from a serial port, parses 14 RC channels. | ✅ |
 | `ibus_tx` | Generates IBUS RC channel packets at 50 Hz with a sawtooth sweep. | ✅ |
-| `joystick` | Reads a USB joystick/gamepad via evdev and maps axis values to the CRSF (172–1811) or IBUS (1000–2000) range. Can transmit directly over UART. | ⚠️ needs USB host |
+| `sbus_rx` | Reads SBUS (Futaba) frames from a serial port, parses 16 RC channels. Requires hardware inverter for USB-UART. | ✅ |
+| `sbus_tx` | Generates SBUS RC channel packets at 100 Hz with a sawtooth sweep. Requires hardware inverter for USB-UART. | ✅ |
+| `joystick` | Reads a USB joystick/gamepad via evdev and maps axis values to the CRSF (172–1811), SBUS (172–1811), or IBUS (1000–2000) range. Can transmit directly over UART. | ⚠️ needs USB host |
 
 ## Requirements
 
@@ -40,7 +42,7 @@ CROSS=arm-linux-gnueabihf- make
 make
 ```
 
-Five binaries are produced: `crsf_rx`, `crsf_tx`, `ibus_rx`, `ibus_tx`, `joystick`.
+Seven binaries are produced: `crsf_rx`, `crsf_tx`, `ibus_rx`, `ibus_tx`, `sbus_rx`, `sbus_tx`, `joystick`.
 
 ## Usage
 
@@ -78,6 +80,23 @@ Channels: 0:1500 1:1500 2:1500 3:1500 4:1500 5:1500 6:1500 7:1500  | 8:1500 9:15
 
 IBUS uses 115200 baud, 14 channels in the 1000–2000 range.
 
+### Receive SBUS data
+
+```bash
+./sbus_rx /dev/ttyAMA0 [-d]
+```
+
+SBUS uses 100000 baud 8E2 with an inverted signal. On most SoC UARTs
+the inversion is handled in hardware; USB-UART adapters typically need an
+external inverter circuit.
+
+Output:
+
+```
+Listening for SBUS data on /dev/ttyAMA0...
+Channels: 0:992 1:992 2:992 3:992 4:992 5:992 6:992 7:992 8:992 9:992 10:992 11:992 12:992 13:992 14:992 15:992
+```
+
 ### Transmit test frames
 
 CRSF (100 Hz):
@@ -92,21 +111,27 @@ IBUS (50 Hz):
 ./ibus_tx /dev/ttyACM0 [-a <ch>]
 ```
 
+SBUS (100 Hz):
+
+```bash
+./sbus_tx /dev/ttyAMA0 [-a <ch>]
+```
+
 Channel 0 sweeps by default. Use `-a <ch>` to sweep a different channel.
 
 ### Read joystick / full-chain bridge
 
 `joystick` reads a USB joystick via evdev and maps its axes/buttons to
-channel values. It supports both **CRSF** (default) and **IBUS** (`-p ibus`).
-Five display modes are available:
+channel values. It supports **CRSF** (`-p crsf`), **IBUS** (`-p ibus`),
+and **SBUS** (`-p sbus`). Five display modes are available:
 
 | Mode | Command | Behaviour |
 |------|---------|-----------|
 | Status line | `./joystick <evdev>` | Show all channels every frame |
 | Verbose | `./joystick <evdev> -v` | Print every axis/button event + HEX dump |
-| Transmit | `./joystick <evdev> <serial> [-p crsf\|ibus]` | Send frames silently |
-| Tx + status | `./joystick <evdev> <serial> -d [-p crsf\|ibus]` | Send + status line |
-| Tx + verbose | `./joystick <evdev> <serial> -v [-p crsf\|ibus]` | Send + raw events |
+| Transmit | `./joystick <evdev> <serial> -p crsf\|ibus\|sbus` | Send frames silently |
+| Tx + status | `./joystick <evdev> <serial> -d -p crsf\|ibus\|sbus` | Send + status line |
+| Tx + verbose | `./joystick <evdev> <serial> -v -p crsf\|ibus\|sbus` | Send + raw events |
 
 Find your evdev device with:
 
@@ -122,6 +147,9 @@ Examples:
 
 # Silent transmit — send IBUS over UART
 ./joystick /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyS0 -p ibus
+
+# Silent transmit — send SBUS over UART
+./joystick /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyAMA0 -p sbus
 
 # Debug + transmit (CRSF)
 ./joystick /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyS0 -d
@@ -141,11 +169,14 @@ socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 \
 In terminal **A** — transmit test frames:
 
 ```bash
-# CRSF
+# CRSF (100 Hz)
 ./crsf_tx /tmp/ttyV0
 
-# or IBUS
+# or IBUS (50 Hz)
 ./ibus_tx /tmp/ttyV0
+
+# or SBUS (100 Hz) — uses custom 100000 baud via termios2
+./sbus_tx /tmp/ttyV0
 ```
 
 In terminal **B** — receive and decode:
@@ -156,6 +187,9 @@ In terminal **B** — receive and decode:
 
 # or IBUS
 ./ibus_rx /tmp/ttyV1
+
+# or SBUS
+./sbus_rx /tmp/ttyV1
 ```
 
 ### Full chain: joystick → receiver (loopback)
@@ -173,10 +207,13 @@ socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 \
 
 ```bash
 # CRSF
-./joystick /dev/input/by-id/usb-045e_028e-event-joystick /tmp/ttyV0 -d
+./joystick -p crsf /dev/input/by-id/usb-045e_028e-event-joystick /tmp/ttyV0 -d
 
 # or IBUS
-./joystick /dev/input/by-id/usb-045e_028e-event-joystick /tmp/ttyV0 -d -p ibus
+./joystick -p ibus /dev/input/by-id/usb-045e_028e-event-joystick /tmp/ttyV0 -d
+
+# or SBUS
+./joystick -p sbus /dev/input/by-id/usb-045e_028e-event-joystick /tmp/ttyV0 -d
 ```
 
 3. **In terminal B** — receive frames:
@@ -187,6 +224,9 @@ socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 \
 
 # or IBUS
 ./ibus_rx /tmp/ttyV1
+
+# or SBUS
+./sbus_rx /tmp/ttyV1
 ```
 
 Move joystick sticks — the receiver shows live channel values.
@@ -232,11 +272,14 @@ All other buttons are ignored.
 ├── joycam.c              — Shared utils: serial I/O, channel display, axis/button mapping
 ├── joycrsf.c             — CRSF protocol: CRC8, packet parser FSM, packet generator
 ├── joyibus.c             — IBUS protocol: checksum, packet parser FSM, packet generator
+├── joysbus.c             — SBUS protocol: termios2 baudrate, packet parser FSM, packet generator
 ├── crsf_rx.c             — CRSF receiver
 ├── crsf_tx.c             — CRSF transmitter
 ├── ibus_rx.c             — IBUS receiver
 ├── ibus_tx.c             — IBUS transmitter
-├── joystick.c            — evdev joystick reader with CRSF / IBUS output
+├── sbus_rx.c             — SBUS receiver
+├── sbus_tx.c             — SBUS transmitter
+├── joystick.c            — evdev joystick reader with CRSF / IBUS / SBUS output
 └── README.md             — This file
 ```
 

@@ -14,12 +14,12 @@ CFLAGS		+= -Wall -Wextra -Werror=implicit-function-declaration -Wunused-result
 CFLAGS		+= -ffunction-sections -fdata-sections
 LDFLAGS		:= -Wl,--gc-sections
 
-JOYCAM_OBJS	:= joycam.o joycrsf.o joyibus.o
+JOYCAM_OBJS	:= joycam.o joycrsf.o joyibus.o joysbus.o
 
 DESTDIR		?=
 .PHONY: all clean install
 
-all: crsf_rx crsf_tx ibus_rx ibus_tx joystick
+all: crsf_rx crsf_tx ibus_rx ibus_tx sbus_rx sbus_tx joystick
 
 # --- CRSF receiver ---
 crsf_rx: crsf_rx.o $(JOYCAM_OBJS)
@@ -53,6 +53,22 @@ ibus_tx: ibus_tx.o $(JOYCAM_OBJS)
 ibus_tx.o: ibus_tx.c joycam.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+# --- SBUS receiver ---
+sbus_rx: sbus_rx.o $(JOYCAM_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^
+	$(STRIP) --strip-all $@
+
+sbus_rx.o: sbus_rx.c joycam.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# --- SBUS transmitter ---
+sbus_tx: sbus_tx.o $(JOYCAM_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^
+	$(STRIP) --strip-all $@
+
+sbus_tx.o: sbus_tx.c joycam.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 # --- Joystick ---
 joystick: joystick.o $(JOYCAM_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^
@@ -71,13 +87,18 @@ joycrsf.o: joycrsf.c joycam.h
 joyibus.o: joyibus.c joycam.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-install: crsf_rx crsf_tx ibus_rx ibus_tx joystick
+joysbus.o: joysbus.c joycam.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+install: crsf_rx crsf_tx ibus_rx ibus_tx sbus_rx sbus_tx joystick
 	mkdir -p $(DESTDIR)/usr/local/bin
 	install -m 0755 crsf_rx $(DESTDIR)/usr/local/bin/
 	install -m 0755 crsf_tx $(DESTDIR)/usr/local/bin/
 	install -m 0755 ibus_rx $(DESTDIR)/usr/local/bin/
 	install -m 0755 ibus_tx $(DESTDIR)/usr/local/bin/
+	install -m 0755 sbus_rx $(DESTDIR)/usr/local/bin/
+	install -m 0755 sbus_tx $(DESTDIR)/usr/local/bin/
 	install -m 0755 joystick $(DESTDIR)/usr/local/bin/
 
 clean:
-	rm -f *.o crsf_rx crsf_tx ibus_rx ibus_tx joystick
+	rm -f *.o crsf_rx crsf_tx ibus_rx ibus_tx sbus_rx sbus_tx joystick

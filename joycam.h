@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <termios.h>
 
 // --- CRSF Protocol Constants ---
 #define CRSF_SYNC_BYTE 0xC8
@@ -24,6 +25,17 @@
 #define CRSF_CHANNEL_MIN 172
 #define CRSF_CHANNEL_MAX 1811
 #define CRSF_CHANNEL_MID 992
+
+// --- SBUS Protocol Constants ---
+#define SBUS_START_BYTE 0x0F
+#define SBUS_END_BYTE   0x00
+#define SBUS_NUM_CHANNELS 16
+#define SBUS_PACKET_SIZE 25
+/* start(1) + channels(22) + flags(1) + end(1) */
+#define SBUS_BAUDRATE 100000
+#define SBUS_CHANNEL_MIN 172
+#define SBUS_CHANNEL_MAX 1811
+#define SBUS_CHANNEL_MID 992
 
 // --- IBUS Protocol Constants ---
 #define IBUS_SYNC1 0x20
@@ -67,6 +79,7 @@ typedef struct {
 #pragma pack(pop)
 
 // --- Serial port helpers ---
+int  set_baudrate_custom(int fd, int speed);
 typedef struct {
     int fd;              /* POSIX fd, -1 if closed */
 } crsf_handle_t;
@@ -89,6 +102,10 @@ int     crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels,
                         crsf_link_stats_t* out_stats);
 void    crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels);
 uint8_t crsf_crc8(const uint8_t* data, uint16_t len);
+
+// --- SBUS protocol functions ---
+void sbus_generate_packet(uint8_t* buffer, const uint16_t* channels);
+int  sbus_parse_byte(uint8_t data, crsf_channels_t* out_channels);
 
 // --- IBUS protocol functions ---
 uint16_t ibus_checksum(const uint8_t* data, int len);

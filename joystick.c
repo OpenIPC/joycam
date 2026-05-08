@@ -83,7 +83,7 @@ static void print_help(const char* prog) {
     printf("\nFlags:\n");
     printf("  -d, --debug         show compact status line every frame\n");
     printf("  -v, --verbose       show every axis and button event\n");
-    printf("  -p, --protocol <p>  REQUIRED. Output protocol: crsf or ibus\n");
+    printf("  -p, --protocol <p>  REQUIRED. Output protocol: crsf, ibus, or sbus\n");
     printf("\nDefault evdev path: /dev/input/by-id/usb-...-event-joystick\n");
     printf("Find your device:  ls -l /dev/input/by-id/*-joystick\n");
 }
@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
     const char* serial_port  = NULL;
     int         debug_mode   = 0;
     int         verbose_mode = 0;
-    int         use_ibus     = 0;
+    int         protocol     = 0;  /* 0=crsf, 1=ibus, 2=sbus */
     int         protocol_set = 0;
 
     /* --- Parse arguments --- */
@@ -122,9 +122,11 @@ int main(int argc, char** argv) {
             i++;
             protocol_set = 1;
             if (strcmp(argv[i], "ibus") == 0)
-                use_ibus = 1;
+                protocol = 1;
+            else if (strcmp(argv[i], "sbus") == 0)
+                protocol = 2;
             else if (strcmp(argv[i], "crsf") != 0) {
-                fprintf(stderr, "Error: unknown protocol '%s'. Use crsf or ibus.\n", argv[i]);
+                fprintf(stderr, "Error: unknown protocol '%s'. Use crsf, ibus, or sbus.\n", argv[i]);
                 return 1;
             }
             continue;
@@ -138,7 +140,7 @@ int main(int argc, char** argv) {
     }
 
     if (!protocol_set) {
-        fprintf(stderr, "Error: -p (--protocol) is required. Use 'crsf' or 'ibus'.\n");
+        fprintf(stderr, "Error: -p (--protocol) is required. Use crsf, ibus, or sbus.\n");
         fprintf(stderr, "       %s -h for full help.\n", argv[0]);
         return 1;
     }
@@ -152,12 +154,12 @@ int main(int argc, char** argv) {
 
     /* Resolve display mode */
     if (!serial_port && !verbose_mode)
-        debug_mode = 1;  /* status line by default in console mode */
+        debug_mode = 1;
 
     openlog("joystick", LOG_PID | LOG_CONS, LOG_DAEMON);
-    syslog(LOG_INFO, "starting evdev=%s serial=%s debug=%d verbose=%d",
+    syslog(LOG_INFO, "starting evdev=%s serial=%s proto=%d debug=%d verbose=%d",
            device_path, serial_port ? serial_port : "(none)",
-           debug_mode, verbose_mode);
+           protocol, debug_mode, verbose_mode);
 
     /* sigaction without SA_RESTART so Ctrl+C interrupts blocking reads. */
     {   struct sigaction sa;
@@ -193,24 +195,41 @@ int main(int argc, char** argv) {
     ioctl(fd, EVIOCGPHYS(sizeof(dev_phys)), dev_phys);
 
     /* --- Open serial port (optional) --- */
-    int baudrate = use_ibus ? IBUS_BAUDRATE : CRSF_BAUDRATE;
+    int baudrate;
+    if (protocol == 1) baudrate = IBUS_BAUDRATE;
+    else if (protocol == 2) baudrate = B9600;  /* SBUS: will override via termios2 */
+    else baudrate = CRSF_BAUDRATE;
     crsf_handle_t h = {-1};
     if (serial_port && crsf_serial_open(serial_port, &h, O_WRONLY, baudrate) < 0) {
         close(fd);
         closelog();
         return 1;
     }
+    /* Override baudrate for SBUS (custom 100000 via termios2). */
+    if (serial_port && protocol == 2) {
+        if (set_baudrate_custom(h.fd, SBUS_BAUDRATE) < 0) {
+            fprintf(stderr, "Error: cannot set 100000 baud on %s\n", serial_port);
+            close(fd);
+            closelog();
+            return 1;
+        }
+    }
 
+    const char* proto_name = protocol == 1 ? "IBUS" : protocol == 2 ? "SBUS" : "CRSF";
     if (debug_mode || verbose_mode) {
         printf("Listening on %s...\n", device_path);
         printf("Device: %s %s\n",
                dev_name[0] ? dev_name : "(unknown)",
                dev_phys[0] ? dev_phys : "");
-        if (h.fd >= 0)
+        if (h.fd >= 0) {
+            int actual_baud = protocol == 1 ? IBUS_BAUDRATE
+                             : protocol == 2 ? SBUS_BAUDRATE
+                             : CRSF_BAUDRATE;
             printf("  %s output on %s (%d baud)\n",
-                   use_ibus ? "IBUS" : "CRSF", serial_port, baudrate);
-        else
+                   proto_name, serial_port, actual_baud);
+        } else {
             printf("  (no serial port)\n");
+        }
         fflush(stdout);
     }
     syslog(LOG_INFO, "started evdev=%s", device_path);
@@ -223,11 +242,20 @@ int main(int argc, char** argv) {
 
     /* --- Main loop --- */
     struct input_event ev;
-    int num_channels = use_ibus ? IBUS_NUM_CHANNELS : CRSF_NUM_CHANNELS;
-    int crsf_mid     = use_ibus ? IBUS_CHANNEL_MID : CRSF_CHANNEL_MID;
-    int crsf_min     = use_ibus ? IBUS_CHANNEL_MIN : CRSF_CHANNEL_MIN;
-    int crsf_max     = use_ibus ? IBUS_CHANNEL_MAX : CRSF_CHANNEL_MAX;
-    int packet_size  = use_ibus ? IBUS_PACKET_SIZE : CRSF_TOTAL_FRAME_SIZE;
+    int num_channels, crsf_mid, crsf_min, crsf_max, packet_size;
+    if (protocol == 1) {
+        num_channels = IBUS_NUM_CHANNELS;
+        crsf_mid = IBUS_CHANNEL_MID;
+        crsf_min = IBUS_CHANNEL_MIN;
+        crsf_max = IBUS_CHANNEL_MAX;
+        packet_size = IBUS_PACKET_SIZE;
+    } else {
+        num_channels = CRSF_NUM_CHANNELS;
+        crsf_mid = CRSF_CHANNEL_MID;
+        crsf_min = CRSF_CHANNEL_MIN;
+        crsf_max = CRSF_CHANNEL_MAX;
+        packet_size = protocol == 2 ? SBUS_PACKET_SIZE : CRSF_TOTAL_FRAME_SIZE;
+    }
     uint16_t channels[CRSF_NUM_CHANNELS];
     for (int i = 0; i < CRSF_NUM_CHANNELS; i++)
         channels[i] = crsf_mid;
@@ -255,7 +283,7 @@ int main(int argc, char** argv) {
                 if (ev.type == EV_SYN && ev.code == SYN_REPORT)
                     break;
                 if (ev.type == EV_ABS)
-                    process_axis_event(fd, &ev, channels, use_ibus);
+                    process_axis_event(fd, &ev, channels, protocol == 1);
                 else if (ev.type == EV_KEY && ev.value != 2)
                     process_button_event(&ev, channels, crsf_min, crsf_max);
             }
@@ -268,12 +296,11 @@ int main(int argc, char** argv) {
         if (ev.type == EV_MSC) continue;
 
         if (ev.type == EV_ABS) {
-            process_axis_event(fd, &ev, channels, use_ibus);
+            process_axis_event(fd, &ev, channels, protocol == 1);
 
             if (verbose_mode) {
                 printf("Axis %d: val %d -> %s\n",
-                       ev.code, ev.value,
-                       use_ibus ? "IBUS" : "CRSF");
+                       ev.code, ev.value, proto_name);
                 fflush(stdout);
             }
         }
@@ -284,7 +311,7 @@ int main(int argc, char** argv) {
             if (verbose_mode) {
                 printf("Button %d %s -> ch%d (%s)\n",
                        ev.code, ev.value ? "pressed" : "released",
-                       ch, use_ibus ? "IBUS" : "CRSF");
+                       ch, proto_name);
                 fflush(stdout);
             }
         }
@@ -298,8 +325,10 @@ int main(int argc, char** argv) {
             }
 
             /* Generate and send protocol frame. */
-            if (use_ibus)
+            if (protocol == 1)
                 ibus_generate_packet(packet, channels);
+            else if (protocol == 2)
+                sbus_generate_packet(packet, channels);
             else
                 crsf_generate_rc_packet(packet, channels);
             if (h.fd >= 0) {
@@ -307,8 +336,7 @@ int main(int argc, char** argv) {
                 if (wret < 0)
                     syslog(LOG_ERR, "write error on serial port");
             } else if (verbose_mode) {
-                crsf_hex_dump(packet, packet_size,
-                              use_ibus ? "IBUS" : "CRSF");
+                crsf_hex_dump(packet, packet_size, proto_name);
             }
         }
     }

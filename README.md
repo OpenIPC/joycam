@@ -21,25 +21,15 @@ UART — no separate computer needed.
 
 - Linux (tested on Ubuntu 22.04 / Debian 12, OpenIPC firmware)
 - gcc with GNU99 support (or cross-compiler for target SoC)
-- [libserialport](http://sigrok.org/wiki/libserialport) — serial port I/O (required by
-  `crsf_rx` and `crsf_tx`)
-- [libevdev](https://www.freedesktop.org/wiki/Software/libevdev/) — evdev input
-  device access (**only** required by `joystick`; skippable on headless OpenIPC devices)
-- `pkg-config` — used by the Makefile to locate library flags
-
-### Install dependencies (Debian / Ubuntu)
-
-```bash
-sudo apt install gcc libserialport-dev libevdev-dev pkg-config
-```
+- **No external libraries.** Pure POSIX + Linux ioctl.
+  Only depends on the C standard library and kernel headers
+  (`linux/input.h` for evdev support).
 
 ### Cross-compilation for OpenIPC (arm-linux-gnueabihf / aarch64-linux-gnu)
 
 ```bash
 CROSS=arm-linux-gnueabihf- make
 ```
-
-Serial port support (`libserialport`) is already available in the OpenIPC SDK.
 
 ## Build
 

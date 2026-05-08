@@ -11,7 +11,6 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <libserialport.h>
 
 // --- CRSF Protocol Constants ---
 #define CRSF_SYNC_BYTE 0xC8
@@ -48,8 +47,7 @@ typedef struct {
 
 // --- Serial port helpers ---
 typedef struct {
-    struct sp_port* sp;  /* libserialport handle, NULL if using POSIX */
-    int fd;              /* POSIX fd, -1 if using libserialport */
+    int fd;              /* POSIX fd, -1 if closed */
 } crsf_handle_t;
 
 int  crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baudrate);

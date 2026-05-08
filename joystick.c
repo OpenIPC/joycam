@@ -21,8 +21,8 @@
 #include <syslog.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <poll.h>
 #include <linux/input.h>
-#include <libevdev/libevdev.h>
 #include "joycrsf.h"
 
 static volatile sig_atomic_t stop_flag = 0;
@@ -145,21 +145,15 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    struct libevdev* dev;
-    int rc = libevdev_new_from_fd(fd, &dev);
-    if (rc < 0) {
-        fprintf(stderr, "Error: libevdev init: %s (rc=%d)\n",
-                strerror(-rc), rc);
-        syslog(LOG_ERR, "libevdev init failed: %s", strerror(-rc));
-        close(fd);
-        closelog();
-        return 1;
-    }
+    /* Query device name and phys from evdev via ioctl. */
+    char dev_name[256] = {0};
+    char dev_phys[256] = {0};
+    ioctl(fd, EVIOCGNAME(sizeof(dev_name)), dev_name);
+    ioctl(fd, EVIOCGPHYS(sizeof(dev_phys)), dev_phys);
 
     /* --- Open serial port (optional) --- */
-    crsf_handle_t h = {NULL, -1};
+    crsf_handle_t h = {-1};
     if (serial_port && crsf_serial_open(serial_port, &h, O_WRONLY, 420000) < 0) {
-        libevdev_free(dev);
         close(fd);
         closelog();
         return 1;
@@ -168,9 +162,9 @@ int main(int argc, char** argv) {
     if (debug_mode || verbose_mode) {
         printf("Listening on %s...\n", device_path);
         printf("Device: %s %s\n",
-               libevdev_get_name(dev),
-               libevdev_get_phys(dev) ? libevdev_get_phys(dev) : "");
-        if (h.sp || h.fd >= 0)
+               dev_name[0] ? dev_name : "(unknown)",
+               dev_phys[0] ? dev_phys : "");
+        if (h.fd >= 0)
             printf("  CRSF output on %s\n", serial_port);
         else
             printf("  (no serial port)\n");
@@ -179,7 +173,7 @@ int main(int argc, char** argv) {
     syslog(LOG_INFO, "started evdev=%s", device_path);
 
     /* Grab the device so events don't get stolen. */
-    libevdev_grab(dev, LIBEVDEV_GRAB);
+    ioctl(fd, EVIOCGRAB, 1);
 
     /* --- Main loop --- */
     struct input_event ev;
@@ -188,28 +182,39 @@ int main(int argc, char** argv) {
     uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
 
     while (!stop_flag) {
-        rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
-        if (rc == -EAGAIN) {
-            usleep(2000);
-            continue;
+        struct pollfd pfd = { .fd = fd, .events = POLLIN };
+        int pr = poll(&pfd, 1, 10);  /* 10 ms timeout for signal checking */
+        if (pr < 0) {
+            if (errno == EINTR) continue;
+            break;
         }
-        if (rc == -EINTR) continue;
-        if (rc != LIBEVDEV_READ_STATUS_SUCCESS) {
-            if (rc == LIBEVDEV_READ_STATUS_SYNC) {
-                while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_SYNC, &ev)
-                       == LIBEVDEV_READ_STATUS_SUCCESS)
-                    ;
+        if (pr == 0) continue;  /* timeout — no data, re-check stop_flag */
+
+        ssize_t n = read(fd, &ev, sizeof(ev));
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        /* On SYN_DROPPED, drain all pending events until SYN_REPORT. */
+        if (n == sizeof(ev) && ev.type == EV_SYN && ev.code == SYN_DROPPED) {
+            while (read(fd, &ev, sizeof(ev)) > 0) {
+                if (ev.type == EV_SYN && ev.code == SYN_REPORT)
+                    break;
             }
             continue;
         }
+        if (n != sizeof(ev)) continue;
 
         /* Suppress EV_MSC (kernel-internal, not user input). */
         if (ev.type == EV_MSC) continue;
 
         if (ev.type == EV_ABS) {
-            const struct input_absinfo* abs = libevdev_get_abs_info(dev, ev.code);
-            int min = abs ? abs->minimum : 0;
-            int max = abs ? abs->maximum : 255;
+            struct input_absinfo abs;
+            int min = 0, max = 255;
+            if (ioctl(fd, EVIOCGABS(ev.code), &abs) == 0) {
+                min = abs.minimum;
+                max = abs.maximum;
+            }
             int crsf_val = axis_to_crsf(ev.value, min, max);
 
             if (ev.code == 0) channels[0] = crsf_val;
@@ -249,7 +254,7 @@ int main(int argc, char** argv) {
 
             /* Send CRSF frame or HEX dump. */
             crsf_generate_rc_packet(packet, channels);
-            if (h.sp || h.fd >= 0) {
+            if (h.fd >= 0) {
                 int wret = crsf_write(&h, packet, CRSF_TOTAL_FRAME_SIZE, 10);
                 if (wret < 0)
                     syslog(LOG_ERR, "write error on serial port");
@@ -261,7 +266,6 @@ int main(int argc, char** argv) {
 
     syslog(LOG_INFO, "shutting down");
     crsf_serial_close(&h);
-    libevdev_free(dev);
     close(fd);
     closelog();
     return 0;

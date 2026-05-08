@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     }
     signal(SIGPIPE, SIG_IGN);
 
-    crsf_handle_t h = {NULL, -1};
+    crsf_handle_t h = {-1};
     if (crsf_serial_open(argv[1], &h, O_WRONLY, 420000) < 0) {
         closelog();
         return 1;

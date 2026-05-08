@@ -22,28 +22,7 @@ static int have_sync = 0;
 // --- Serial port helpers ---
 
 int crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baudrate) {
-    h->sp = NULL;
-    h->fd = -1;
-
-    /* Try libserialport first (works for /dev/tty* devices). */
-    struct sp_port* sp = NULL;
-    if (sp_get_port_by_name(port_name, &sp) == SP_OK && sp) {
-        int sp_mode = SP_MODE_READ;
-        if (mode == O_RDWR)       sp_mode = SP_MODE_READ_WRITE;
-        else if (mode == O_WRONLY) sp_mode = SP_MODE_WRITE;
-        if (sp_open(sp, sp_mode) == SP_OK) {
-            sp_set_baudrate(sp, baudrate);
-            sp_set_parity(sp, SP_PARITY_NONE);
-            sp_set_bits(sp, 8);
-            sp_set_stopbits(sp, 1);
-            h->sp = sp;
-            return 0;
-        }
-        sp_free_port(sp);
-    }
-
-    /* Fallback: POSIX open for PTY and other non-standard devices. */
-    int oflags = O_NOCTTY;
+    int oflags = O_NOCTTY | O_NONBLOCK;
     if (mode == O_RDONLY)      oflags |= O_RDONLY;
     else if (mode == O_WRONLY) oflags |= O_WRONLY;
     else                       oflags |= O_RDWR;
@@ -54,6 +33,11 @@ int crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baud
         syslog(LOG_ERR, "failed to open %s: %s", port_name, strerror(errno));
         return -1;
     }
+
+    /* Remove O_NONBLOCK after open — we use poll() for timed I/O. */
+    int flags = fcntl(h->fd, F_GETFL);
+    if (flags >= 0)
+        fcntl(h->fd, F_SETFL, flags & ~O_NONBLOCK);
 
     /* Configure termios for CRSF (420000 8N1). */
     struct termios tio;
@@ -71,14 +55,14 @@ int crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baud
 }
 
 void crsf_serial_close(crsf_handle_t* h) {
-    if (h->sp) { sp_close(h->sp); sp_free_port(h->sp); }
-    if (h->fd >= 0) close(h->fd);
-    h->sp = NULL; h->fd = -1;
+    if (h->fd >= 0) {
+        tcdrain(h->fd);
+        close(h->fd);
+    }
+    h->fd = -1;
 }
 
 int crsf_read(crsf_handle_t* h, void* buf, size_t len, int timeout_ms) {
-    if (h->sp)
-        return sp_blocking_read(h->sp, buf, len, timeout_ms);
     if (h->fd < 0) return -1;
     struct pollfd pfd = { .fd = h->fd, .events = POLLIN };
     int pr = poll(&pfd, 1, timeout_ms);
@@ -87,8 +71,7 @@ int crsf_read(crsf_handle_t* h, void* buf, size_t len, int timeout_ms) {
 }
 
 int crsf_write(crsf_handle_t* h, const void* buf, size_t len, int timeout_ms) {
-    if (h->sp)
-        return sp_blocking_write(h->sp, buf, len, timeout_ms);
+    (void)timeout_ms;
     if (h->fd < 0) return -1;
     return (int)write(h->fd, buf, len);
 }

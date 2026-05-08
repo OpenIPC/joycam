@@ -37,6 +37,39 @@ static void handle_signal(int sig) {
 
 /* axis_to_crsf and button_to_channel are now in joycam.c */
 
+/* Helper: process an EV_ABS event and update channels array. */
+static void process_axis_event(int fd, const struct input_event* ev,
+                               uint16_t* channels, int use_ibus) {
+    struct input_absinfo abs;
+    int min = 0, max = 255;
+    if (ioctl(fd, EVIOCGABS(ev->code), &abs) == 0) {
+        min = abs.minimum;
+        max = abs.maximum;
+    }
+    int ch_val = use_ibus
+        ? axis_to_range(ev->value, min, max,
+                        IBUS_CHANNEL_MIN, IBUS_CHANNEL_MAX)
+        : axis_to_crsf(ev->value, min, max);
+
+    if (ev->code == 0) channels[0] = ch_val;
+    else if (ev->code == 1) channels[1] = ch_val;
+    else if (ev->code == 2) channels[2] = ch_val;
+    else if (ev->code == 5) channels[3] = ch_val;
+    else if (ev->code == 9) channels[4] = ch_val;
+    else if (ev->code == 10) channels[5] = ch_val;
+    else if (ev->code == 16) channels[6] = ch_val;
+    else if (ev->code == 17) channels[7] = ch_val;
+}
+
+/* Helper: process an EV_KEY event (value != 2) and update channels array. */
+static void process_button_event(const struct input_event* ev,
+                                 uint16_t* channels,
+                                 int crsf_min, int crsf_max) {
+    int ch = button_to_channel(ev->code);
+    if (ch >= 0 && ch < CRSF_NUM_CHANNELS)
+        channels[ch] = ev->value ? crsf_max : crsf_min;
+}
+
 static void print_help(const char* prog) {
     printf("Joystick reader v%s\n", VERSION);
     printf("Usage:\n");
@@ -214,51 +247,39 @@ int main(int argc, char** argv) {
             if (errno == EINTR) continue;
             break;
         }
-        /* On SYN_DROPPED, drain all pending events until SYN_REPORT. */
+        /* On SYN_DROPPED, drain all pending events until SYN_REPORT
+           but process axis/button events so no data is lost, then
+           fall through to process the SYN_REPORT normally. */
         if (n == sizeof(ev) && ev.type == EV_SYN && ev.code == SYN_DROPPED) {
             while (read(fd, &ev, sizeof(ev)) > 0) {
                 if (ev.type == EV_SYN && ev.code == SYN_REPORT)
                     break;
+                if (ev.type == EV_ABS)
+                    process_axis_event(fd, &ev, channels, use_ibus);
+                else if (ev.type == EV_KEY && ev.value != 2)
+                    process_button_event(&ev, channels, crsf_min, crsf_max);
             }
+            /* Fall through to process the SYN_REPORT. NOT continue. */
+        } else if (n != sizeof(ev)) {
             continue;
         }
-        if (n != sizeof(ev)) continue;
 
         /* Suppress EV_MSC (kernel-internal, not user input). */
         if (ev.type == EV_MSC) continue;
 
         if (ev.type == EV_ABS) {
-            struct input_absinfo abs;
-            int min = 0, max = 255;
-            if (ioctl(fd, EVIOCGABS(ev.code), &abs) == 0) {
-                min = abs.minimum;
-                max = abs.maximum;
-            }
-            int ch_val = use_ibus
-                ? axis_to_range(ev.value, min, max,
-                                IBUS_CHANNEL_MIN, IBUS_CHANNEL_MAX)
-                : axis_to_crsf(ev.value, min, max);
-
-            if (ev.code == 0) channels[0] = ch_val;
-            else if (ev.code == 1) channels[1] = ch_val;
-            else if (ev.code == 2) channels[2] = ch_val;
-            else if (ev.code == 5) channels[3] = ch_val;
-            else if (ev.code == 9) channels[4] = ch_val;
-            else if (ev.code == 10) channels[5] = ch_val;
-            else if (ev.code == 16) channels[6] = ch_val;
-            else if (ev.code == 17) channels[7] = ch_val;
+            process_axis_event(fd, &ev, channels, use_ibus);
 
             if (verbose_mode) {
-                printf("Axis %d: val %d [%d..%d] -> %s %d\n",
-                       ev.code, ev.value, min, max,
-                       use_ibus ? "IBUS" : "CRSF", ch_val);
+                printf("Axis %d: val %d -> %s\n",
+                       ev.code, ev.value,
+                       use_ibus ? "IBUS" : "CRSF");
                 fflush(stdout);
             }
         }
         else if (ev.type == EV_KEY && ev.value != 2) {
             int ch = button_to_channel(ev.code);
-            if (ch >= 0 && ch < CRSF_NUM_CHANNELS)
-                channels[ch] = ev.value ? crsf_max : crsf_min;
+            process_button_event(&ev, channels, crsf_min, crsf_max);
 
             if (verbose_mode) {
                 printf("Button %d %s -> ch%d (%s)\n",

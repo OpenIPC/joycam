@@ -78,13 +78,16 @@ Sends RC channel frames at 100 Hz. Channel 0 sweeps from 172 to 1811.
 
 ### Read joystick / full-chain CRSF bridge
 
-`joystick` has three modes:
+`joystick` reads a USB joystick via evdev and maps its axes/buttons to
+CRSF channel values. It has four display modes:
 
 | Mode | Command | Behaviour |
 |------|---------|-----------|
-| Debug only | `./joystick <evdev_path>` | Print axis/button events to console |
-| Transmit | `./joystick <evdev_path> <serial_port>` | Send CRSF frames silently (no console) |
-| Debug + Tx | `./joystick <evdev_path> <serial_port> -d` | Send and print to console |
+| Status line | `./joystick <evdev>` | Show all 16 channels every frame |
+| Verbose | `./joystick <evdev> -v` | Print every axis/button event + CRSF HEX dump |
+| Transmit | `./joystick <evdev> <serial>` | Send CRSF frames silently |
+| Tx + status | `./joystick <evdev> <serial> -d` | Send + status line |
+| Tx + verbose | `./joystick <evdev> <serial> -v` | Send + raw events |
 
 Find your evdev device with:
 
@@ -133,13 +136,15 @@ You should see channels and link statistics appearing on the receiver side.
 ### Full chain: joystick → receiver (loopback)
 
 `joystick` can read from evdev **and** write CRSF frames directly to a serial
-port. Three operating modes are available:
+port. Five operating modes are available:
 
 | Mode | Command | Behaviour |
 |------|---------|-----------|
-| Debug only | `./joystick <evdev>` | Print axis/button events to console |
-| Transmit | `./joystick <evdev> <serial>` | Send CRSF frames silently, no console |
-| Debug + Tx | `./joystick <evdev> <serial> -d` | Send CRSF frames **and** print to console |
+| Status line | `./joystick <evdev>` | Show all 16 channels every frame |
+| Verbose | `./joystick <evdev> -v` | Every axis/button event + CRSF HEX dump |
+| Transmit | `./joystick <evdev> <serial>` | Send CRSF frames silently |
+| Tx + status | `./joystick <evdev> <serial> -d` | Send + status line |
+| Tx + verbose | `./joystick <evdev> <serial> -v` | Send + raw events |
 
 Example loopback test using a virtual serial port:
 
@@ -166,23 +171,25 @@ Move joystick sticks — the receiver shows live channel values:
 
 ```
 Listening for CRSF data on /tmp/ttyV1...
-Channels: 0:172 1:992 2:1811 3:992 4:992 5:992 6:992 7:992 8:992 9:992 10:992 11:992 12:992 13:992 14:992 15:992
-Channels: 0:988 1:1020 2:1700 3:1500 4:992 5:992 6:992 7:992 8:992 9:992 10:992 11:992 12:992 13:992 14:992 15:992
+Channels: 0:172  1:992  2:1811  3:992  4:992  5:992  6:992  7:992   | 8:992  9:992  10:992  11:992  12:992  13:992  14:992  15:992
+Channels: 0:988  1:1020  2:1700  3:1500  4:992  5:992  6:992  7:992   | 8:992  9:992  10:992  11:992  12:992  13:992  14:992  15:992
 ```
 
-**Axis mapping:** axes 0–7 are mapped to CRSF channels 0–7.  
-**Button mapping:** button 0 → ch8 (arm), button 1 → ch9.
+**Axis mapping:** axes are mapped by evdev code (0→LX, 1→LY, 2→RX, 5→RY,
+9→LT, 10→D-pad X, 16→D-pad Y, 17→extra).  
+**Button mapping:** BTN_SOUTH(304)→ch8, BTN_EAST(305)→ch9, ... BTN_TL2(315)→ch19.
+Unmapped buttons are ignored.
 
 ## Project structure
 
 ```
 .
 ├── Makefile              — Build system
-├── joycrsf.h             — CRSF protocol constants, structures, prototypes
-├── joycrsf.c             — CRC8, packet parser FSM, packet generator
-├── crsf_rx.c             — Serial receiver
-├── crsf_tx.c             — Packet transmitter
-├── joystick.c            — The evdev joystick reader (optional)
+├── joycrsf.h             — CRSF protocol constants, structures, helpers, prototypes
+├── joycrsf.c             — CRC8, packet parser FSM, packet generator, serial helpers
+├── crsf_rx.c             — Serial receiver (uses crsf_serial_open)
+├── crsf_tx.c             — Packet transmitter (uses crsf_serial_open)
+├── joystick.c            — evdev joystick reader with CRSF output
 └── README.md             — This file
 ```
 

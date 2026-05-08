@@ -8,10 +8,59 @@
 
 #include "joycrsf.h"
 #include <string.h>
+#include <syslog.h>
 
 static crsf_packet_t rx_packet;
 static uint8_t rx_index = 0;
 static int have_sync = 0;
+
+// --- Serial port helpers ---
+
+int crsf_serial_open(const char* port_name, struct sp_port** port, int mode, int baudrate) {
+    if (sp_get_port_by_name(port_name, port) != SP_OK) {
+        fprintf(stderr, "Error: cannot get serial port %s\n", port_name);
+        syslog(LOG_ERR, "failed to get serial port %s", port_name);
+        return -1;
+    }
+    if (sp_open(*port, mode) != SP_OK) {
+        fprintf(stderr, "Error: cannot open serial port %s\n", port_name);
+        syslog(LOG_ERR, "failed to open serial port %s", port_name);
+        sp_free_port(*port);
+        *port = NULL;
+        return -1;
+    }
+    if (sp_set_baudrate(*port, baudrate) != SP_OK) {
+        fprintf(stderr, "Error: cannot set baudrate %d on %s\n", baudrate, port_name);
+        syslog(LOG_ERR, "failed to set baudrate %d on %s", baudrate, port_name);
+    }
+    sp_set_parity(*port, SP_PARITY_NONE);
+    sp_set_bits(*port, 8);
+    sp_set_stopbits(*port, 1);
+    return 0;
+}
+
+void crsf_serial_close(struct sp_port* port) {
+    if (port) {
+        sp_close(port);
+        sp_free_port(port);
+    }
+}
+
+// --- Common utilities ---
+
+void crsf_print_channels(const uint16_t* channels, int count) {
+    for (int i = 0; i < count; i++) {
+        if (i > 0 && i % 8 == 0) printf(" | ");
+        printf("%d:%-4d ", i, channels[i]);
+    }
+}
+
+void crsf_hex_dump(const uint8_t* data, int len, const char* label) {
+    printf("%s [%d] ", label ? label : "HEX", len);
+    for (int i = 0; i < len; i++)
+        printf("%02x ", data[i]);
+    printf("\n");
+}
 
 // CRC8 calculation polynomial 0xD5
 uint8_t crsf_crc8(const uint8_t* data, uint16_t len) {

@@ -4,10 +4,12 @@
  *
  * joystick.c — USB joystick reader via evdev with CRSF output
  *
- * Modes:
- *   debug         ./joystick <evdev_path>            — print events only
- *   transmit      ./joystick <evdev_path> <serial>   — send CRSF over UART
- *   tx+debug      ./joystick <evdev_path> <serial> -d — both
+ * Modes (debug_mode = status line only, verbose = raw events):
+ *   debug            ./joystick <evdev>              — status line only
+ *   verbose          ./joystick <evdev> -v           — raw event spam
+ *   transmit         ./joystick <evdev> <serial>     — silent CRSF tx
+ *   tx+status        ./joystick <evdev> <serial> -d  — CRSF + status line
+ *   tx+verbose       ./joystick <evdev> <serial> -v  — CRSF + raw events
  *
  */
 
@@ -20,7 +22,6 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <linux/input.h>
-#include <libserialport.h>
 #include <libevdev/libevdev.h>
 #include "joycrsf.h"
 
@@ -31,19 +32,38 @@ static void handle_signal(int sig) {
     stop_flag = 1;
 }
 
-/* Map evdev axis value (-32767..32767) to CRSF range (172..1811). */
-static int axis_to_crsf(int value) {
-    return 172 + (value + 32767) * (1811 - 172) / 65534;
+/* Map evdev axis value to CRSF range (172..1811) using runtime axis limits. */
+static int axis_to_crsf(int value, int min, int max) {
+    if (min == max) return 992;
+    double norm = (double)(value - min) / (double)(max - min);
+    if (norm < 0.0) norm = 0.0;
+    if (norm > 1.0) norm = 1.0;
+    return 172 + (int)(norm * (1811 - 172) + 0.5);
+}
+
+/* Map button code 304-315 (BTN_SOUTH..BTN_TL2) to CRSF channel offset. */
+static int button_to_channel(int code) {
+    if (code >= 304 && code <= 315)
+        return code - 304 + 8;  /* 304->ch8, 305->ch9, ..., 315->ch19 */
+    /* legacy codes 0/1 for very old joysticks */
+    if (code == 0) return 8;
+    if (code == 1) return 9;
+    return -1;  /* unmapped */
 }
 
 static void print_help(const char* prog) {
     printf("Joystick reader v%s\n", VERSION);
     printf("Usage:\n");
-    printf("  %s <evdev_path>                — debug, print events to console\n", prog);
-    printf("  %s <evdev_path> <serial_port>  — full chain, send CRSF via UART\n", prog);
-    printf("  %s <evdev_path> <serial> -d    — transmit + debug console\n", prog);
+    printf("  %s <evdev_path>                — status line only\n", prog);
+    printf("  %s <evdev_path> -v             — verbose (raw events)\n", prog);
+    printf("  %s <evdev_path> <serial_port>  — transmit CRSF (silent)\n", prog);
+    printf("  %s <evdev_path> <serial> -d    — transmit + status line\n", prog);
+    printf("  %s <evdev_path> <serial> -v    — transmit + raw events\n", prog);
     printf("  %s -h / --help                 — this help\n", prog);
     printf("  %s -V / --version              — show version\n", prog);
+    printf("\nFlags:\n");
+    printf("  -d, --debug   show compact status line every frame\n");
+    printf("  -v, --verbose show every axis and button event\n");
     printf("\nDefault evdev path: /dev/input/by-id/usb-...-event-joystick\n");
     printf("Find your device:  ls -l /dev/input/by-id/*-joystick\n");
 }
@@ -52,6 +72,7 @@ int main(int argc, char** argv) {
     const char* device_path  = NULL;
     const char* serial_port  = NULL;
     int         debug_mode   = 0;
+    int         verbose_mode = 0;
 
     /* --- Parse arguments --- */
     for (int i = 1; i < argc; i++) {
@@ -67,6 +88,10 @@ int main(int argc, char** argv) {
             debug_mode = 1;
             continue;
         }
+        if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
+            verbose_mode = 1;
+            continue;
+        }
         if (argv[i][0] != '-') {
             if (!device_path)
                 device_path = argv[i];
@@ -77,28 +102,32 @@ int main(int argc, char** argv) {
 
     if (!device_path) {
         device_path = "/dev/input/by-id/usb-...-event-joystick";
-        printf("Usage: %s <evdev_path> [serial_port] [-d]\n", argv[0]);
+        printf("Usage: %s <evdev_path> [serial_port] [-d|-v]\n", argv[0]);
         printf("  Default evdev: %s\n", device_path);
         printf("  Find your device: ls -l /dev/input/by-id/*-joystick\n");
     }
 
-    /* Resolve debug mode:
-       - no serial port       → debug ON  (console-only mode)
-       - serial port, no  -d  → debug OFF (silent transmit)
-       - serial port, with -d → debug ON  (transmit + console) */
-    if (!serial_port)
-        debug_mode = 1;
+    /* Resolve display mode */
+    if (!serial_port && !verbose_mode)
+        debug_mode = 1;  /* status line by default in console mode */
 
     openlog("joystick", LOG_PID | LOG_CONS, LOG_DAEMON);
-    syslog(LOG_INFO, "starting evdev=%s serial=%s debug=%d",
-           device_path, serial_port ? serial_port : "(none)", debug_mode);
+    syslog(LOG_INFO, "starting evdev=%s serial=%s debug=%d verbose=%d",
+           device_path, serial_port ? serial_port : "(none)",
+           debug_mode, verbose_mode);
 
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
+    /* sigaction without SA_RESTART so Ctrl+C interrupts blocking reads. */
+    {   struct sigaction sa;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sa.sa_handler = handle_signal;
+        sigaction(SIGINT, &sa, NULL);
+        sigaction(SIGTERM, &sa, NULL);
+    }
     signal(SIGPIPE, SIG_IGN);
 
     /* --- Open evdev device --- */
-    int fd = open(device_path, O_RDONLY);
+    int fd = open(device_path, O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
         perror("open");
         syslog(LOG_ERR, "failed to open evdev %s", device_path);
@@ -106,13 +135,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    /* Verify device is a valid evdev before handing it to libevdev. */
     unsigned int evdev_version;
     if (ioctl(fd, EVIOCGVERSION, &evdev_version) < 0) {
         fprintf(stderr, "Error: %s is not an evdev device (%s)\n",
                 device_path, strerror(errno));
-        fprintf(stderr, "  Check the device: ls -l %s\n", device_path);
-        fprintf(stderr, "  Available devices: ls -l /dev/input/by-id/\n");
         close(fd);
         closelog();
         return 1;
@@ -121,58 +147,38 @@ int main(int argc, char** argv) {
     struct libevdev* dev;
     int rc = libevdev_new_from_fd(fd, &dev);
     if (rc < 0) {
-        fprintf(stderr, "Error: libevdev init failed for %s: %s (rc=%d)\n",
-                device_path, strerror(-rc), rc);
-        syslog(LOG_ERR, "libevdev init failed for %s: %s",
-               device_path, strerror(-rc));
+        fprintf(stderr, "Error: libevdev init: %s (rc=%d)\n",
+                strerror(-rc), rc);
+        syslog(LOG_ERR, "libevdev init failed: %s", strerror(-rc));
         close(fd);
         closelog();
         return 1;
     }
-    /* NOTE: libevdev_grab is intentionally NOT called here.
-       Grabbing can block other users and may interfere with non-blocking
-       reads on some kernel/evdev combinations.  We keep the fd non-blocking
-       and handle -EAGAIN gracefully instead. */
 
     /* --- Open serial port (optional) --- */
     struct sp_port* port = NULL;
-    if (serial_port) {
-        if (sp_get_port_by_name(serial_port, &port) != SP_OK) {
-            fprintf(stderr, "Failed to get serial port: %s\n", serial_port);
-            syslog(LOG_ERR, "failed to get serial port %s", serial_port);
-            libevdev_free(dev);
-            close(fd);
-            closelog();
-            return 1;
-        }
-        if (sp_open(port, SP_MODE_WRITE) != SP_OK) {
-            fprintf(stderr, "Failed to open serial port: %s\n", serial_port);
-            syslog(LOG_ERR, "failed to open serial port %s", serial_port);
-            sp_free_port(port);
-            libevdev_free(dev);
-            close(fd);
-            closelog();
-            return 1;
-        }
-        if (sp_set_baudrate(port, 420000) != SP_OK) {
-            syslog(LOG_ERR, "failed to set baudrate on %s", serial_port);
-            fprintf(stderr, "Error: cannot set baudrate 420000 on %s\n", serial_port);
-        }
-        sp_set_parity(port, SP_PARITY_NONE);
-        sp_set_bits(port, 8);
-        sp_set_stopbits(port, 1);
+    if (serial_port && crsf_serial_open(serial_port, &port, SP_MODE_WRITE, 420000) < 0) {
+        libevdev_free(dev);
+        close(fd);
+        closelog();
+        return 1;
     }
 
-    if (debug_mode) {
-        printf("Listening for joystick events on %s...\n", device_path);
+    if (debug_mode || verbose_mode) {
+        printf("Listening on %s...\n", device_path);
+        printf("Device: %s %s\n",
+               libevdev_get_name(dev),
+               libevdev_get_phys(dev) ? libevdev_get_phys(dev) : "");
         if (port)
             printf("  CRSF output on %s\n", serial_port);
+        else
+            printf("  (no serial port — HEX dump every frame)\n");
+        fflush(stdout);
     }
     syslog(LOG_INFO, "started evdev=%s", device_path);
 
-    printf("main loop start: evdev fd=%d\n", fd);
-    fflush(stdout);
-    syslog(LOG_INFO, "main loop start: evdev fd=%d", fd);
+    /* Grab the device so events don't get stolen. */
+    libevdev_grab(dev, LIBEVDEV_GRAB);
 
     /* --- Main loop --- */
     struct input_event ev;
@@ -180,79 +186,81 @@ int main(int argc, char** argv) {
                                             992, 992, 992, 992, 992, 992, 992, 992};
     uint8_t packet[CRSF_TOTAL_FRAME_SIZE];
 
-    /* Print device info */
-    if (debug_mode) {
-        printf("Device: %s %s\n",
-               libevdev_get_name(dev),
-               libevdev_get_phys(dev) ? libevdev_get_phys(dev) : "");
-        fflush(stdout);
-    }
-
     while (!stop_flag) {
-        rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_BLOCKING, &ev);
-        if (rc == -EINTR) {
-            /* Interrupted by signal — check stop_flag. */
+        rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
+        if (rc == -EAGAIN) {
+            usleep(2000);
             continue;
         }
+        if (rc == -EINTR) continue;
         if (rc != LIBEVDEV_READ_STATUS_SUCCESS) {
-            if (debug_mode) {
-                printf("libevdev: rc=%d (%s)\n", rc, strerror(-rc));
-                fflush(stdout);
+            if (rc == LIBEVDEV_READ_STATUS_SYNC) {
+                while (libevdev_next_event(dev, LIBEVDEV_READ_FLAG_SYNC, &ev)
+                       == LIBEVDEV_READ_STATUS_SUCCESS)
+                    ;
             }
             continue;
         }
 
+        /* Suppress EV_MSC (kernel-internal, not user input). */
+        if (ev.type == EV_MSC) continue;
+
         if (ev.type == EV_ABS) {
-            int crsf_val = axis_to_crsf(ev.value);
+            const struct input_absinfo* abs = libevdev_get_abs_info(dev, ev.code);
+            int min = abs ? abs->minimum : 0;
+            int max = abs ? abs->maximum : 255;
+            int crsf_val = axis_to_crsf(ev.value, min, max);
 
-            /* Map first 8 axes to CRSF channels 0-7. */
-            if (ev.code < 8)
-                channels[ev.code] = crsf_val;
+            if (ev.code == 0) channels[0] = crsf_val;
+            else if (ev.code == 1) channels[1] = crsf_val;
+            else if (ev.code == 2) channels[2] = crsf_val;
+            else if (ev.code == 5) channels[3] = crsf_val;
+            else if (ev.code == 9) channels[4] = crsf_val;
+            else if (ev.code == 10) channels[5] = crsf_val;
+            else if (ev.code == 16) channels[6] = crsf_val;
+            else if (ev.code == 17) channels[7] = crsf_val;
 
-            if (debug_mode)
-                printf("Axis %d: value %d -> CRSF %d\n",
-                       ev.code, ev.value, crsf_val);
+            if (verbose_mode) {
+                printf("Axis %d: val %d [%d..%d] -> CRSF %d\n",
+                       ev.code, ev.value, min, max, crsf_val);
+                fflush(stdout);
+            }
         }
         else if (ev.type == EV_KEY && ev.value != 2) {
-            if (debug_mode)
-                printf("Button %d %s\n",
-                       ev.code, ev.value ? "pressed" : "released");
+            int ch = button_to_channel(ev.code);
+            if (ch >= 0 && ch < CRSF_NUM_CHANNELS)
+                channels[ch] = ev.value ? 1811 : 172;
 
-            /* Map first two buttons (BTN_SOUTH=304, BTN_EAST=305 are
-               common on many controllers) to ch8/ch9.  Also accept
-               legacy codes 0/1 for older devices. */
-            if (ev.code == 0 || ev.code == 304)
-                channels[8] = ev.value ? 1811 : 172;
-            if (ev.code == 1 || ev.code == 305)
-                channels[9] = ev.value ? 1811 : 172;
-            if (ev.code == 307)
-                channels[10] = ev.value ? 1811 : 172;
-            if (ev.code == 308)
-                channels[11] = ev.value ? 1811 : 172;
+            if (verbose_mode) {
+                printf("Button %d %s -> ch%d\n",
+                       ev.code, ev.value ? "pressed" : "released", ch);
+                fflush(stdout);
+            }
         }
         else if (ev.type == EV_SYN) {
-            /* SYN events are normal — do not spam. */
-        }
-        else if (debug_mode) {
-            printf("Event type=%d code=%d value=%d\n",
-                   ev.type, ev.code, ev.value);
-        }
+            /* Status line — all 16 channels. */
+            if (debug_mode) {
+                printf("CH ");
+                crsf_print_channels(channels, CRSF_NUM_CHANNELS);
+                printf("\n");
+                fflush(stdout);
+            }
 
-        /* Send CRSF frame via serial port after every event. */
-        if (port) {
+            /* Send CRSF frame or HEX dump. */
             crsf_generate_rc_packet(packet, channels);
-            int wret = sp_blocking_write(port, packet, CRSF_TOTAL_FRAME_SIZE, 10);
-            if (wret < 0) {
-                syslog(LOG_ERR, "write error on serial port");
+            if (port) {
+                int wret = sp_blocking_write(port, packet,
+                                             CRSF_TOTAL_FRAME_SIZE, 10);
+                if (wret < 0)
+                    syslog(LOG_ERR, "write error on serial port");
+            } else if (verbose_mode) {
+                crsf_hex_dump(packet, CRSF_TOTAL_FRAME_SIZE, "CRSF");
             }
         }
     }
 
     syslog(LOG_INFO, "shutting down");
-    if (port) {
-        sp_close(port);
-        sp_free_port(port);
-    }
+    crsf_serial_close(port);
     libevdev_free(dev);
     close(fd);
     closelog();

@@ -10,6 +10,8 @@
 #define JOYCRSF_H
 
 #include <stdint.h>
+#include <stdio.h>
+#include <libserialport.h>
 
 // --- CRSF Protocol Constants ---
 #define CRSF_SYNC_BYTE 0xC8
@@ -44,7 +46,15 @@ typedef struct {
 } crsf_link_stats_t;
 #pragma pack(pop)
 
-// --- Functions ---
+// --- Serial port helpers ---
+int  crsf_serial_open(const char* port_name, struct sp_port** port, int mode, int baudrate);
+void crsf_serial_close(struct sp_port* port);
+
+// --- Common utilities ---
+void crsf_print_channels(const uint16_t* channels, int count);
+void crsf_hex_dump(const uint8_t* data, int len, const char* label);
+
+// --- Protocol functions ---
 int crsf_validate_packet(crsf_packet_t* packet);
 int crsf_parse_byte(uint8_t data, crsf_channels_t* out_channels, crsf_link_stats_t* out_stats);
 void crsf_generate_rc_packet(uint8_t* buffer, const uint16_t* channels);

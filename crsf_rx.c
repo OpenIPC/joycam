@@ -11,7 +11,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <syslog.h>
-#include <libserialport.h>
 #include "joycrsf.h"
 
 static volatile sig_atomic_t stop_flag = 0;
@@ -51,26 +50,10 @@ int main(int argc, char** argv) {
     signal(SIGPIPE, SIG_IGN);
 
     struct sp_port* port;
-    if (sp_get_port_by_name(argv[1], &port) != SP_OK) {
-        fprintf(stderr, "Failed to get port: %s\n", argv[1]);
-        syslog(LOG_ERR, "failed to get port %s", argv[1]);
+    if (crsf_serial_open(argv[1], &port, SP_MODE_READ, 420000) < 0) {
         closelog();
         return 1;
     }
-    if (sp_open(port, SP_MODE_READ) != SP_OK) {
-        fprintf(stderr, "Failed to open port: %s\n", argv[1]);
-        syslog(LOG_ERR, "failed to open port %s", argv[1]);
-        sp_free_port(port);
-        closelog();
-        return 1;
-    }
-    if (sp_set_baudrate(port, 420000) != SP_OK) {
-        syslog(LOG_ERR, "failed to set baudrate");
-        fprintf(stderr, "Error: cannot set baudrate 420000\n");
-    }
-    sp_set_parity(port, SP_PARITY_NONE);
-    sp_set_bits(port, 8);
-    sp_set_stopbits(port, 1);
 
     crsf_channels_t channels = {0};
     crsf_link_stats_t stats = {0};
@@ -108,8 +91,7 @@ int main(int argc, char** argv) {
     }
 
     syslog(LOG_INFO, "shutting down");
-    sp_close(port);
-    sp_free_port(port);
+    crsf_serial_close(port);
     closelog();
     return 0;
 }

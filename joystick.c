@@ -11,7 +11,7 @@
  *   tx+status        ./joystick <evdev> <serial> -d  — tx + status line
  *   tx+verbose       ./joystick <evdev> <serial> -v  — tx + raw events
  *
- * Protocol: -p crsf (default, 420000 baud) | -p ibus (115200 baud)
+ * Protocol: -p crsf (420000 baud) | -p ibus (115200 baud) | -p sbus (100000 baud)
  *
  */
 
@@ -73,11 +73,11 @@ static void process_button_event(const struct input_event* ev,
 static void print_help(const char* prog) {
     printf("Joystick reader v%s\n", VERSION);
     printf("Usage:\n");
-    printf("  %s -p crsf|ibus <evdev_path>                    — status line only\n", prog);
-    printf("  %s -p crsf|ibus <evdev_path> -v                 — verbose (raw events)\n", prog);
-    printf("  %s -p crsf|ibus <evdev_path> <serial_port>      — transmit (silent)\n", prog);
-    printf("  %s -p crsf|ibus <evdev_path> <serial> -d        — transmit + status line\n", prog);
-    printf("  %s -p crsf|ibus <evdev_path> <serial> -v        — transmit + raw events\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev_path>                    — status line only\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev_path> -v                 — verbose (raw events)\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev_path> <serial_port>      — transmit (silent)\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev_path> <serial> -d        — transmit + status line\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev_path> <serial> -v        — transmit + raw events\n", prog);
     printf("  %s -h / --help                     — this help\n", prog);
     printf("  %s -V / --version                  — show version\n", prog);
     printf("\nFlags:\n");
@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
         }
         if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--protocol") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "Error: -p requires an argument (crsf or ibus).\n");
+                fprintf(stderr, "Error: -p requires an argument (crsf, ibus, or sbus).\n");
                 return 1;
             }
             i++;
@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
 
     if (!device_path) {
         fprintf(stderr, "Error: missing evdev device path.\n");
-        fprintf(stderr, "Usage: %s -p crsf|ibus <evdev_path> [serial_port] [-d|-v]\n", argv[0]);
+        fprintf(stderr, "Usage: %s -p crsf|ibus|sbus <evdev_path> [serial_port] [-d|-v]\n", argv[0]);
         fprintf(stderr, "  Find your device: ls -l /dev/input/by-id/*-joystick\n");
         return 1;
     }

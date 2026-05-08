@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
     signal(SIGPIPE, SIG_IGN);
 
     /* --- Open evdev device --- */
-    int fd = open(device_path, O_RDONLY | O_NONBLOCK);
+    int fd = open(device_path, O_RDONLY);
     if (fd < 0) {
         perror("open");
         syslog(LOG_ERR, "failed to open evdev %s", device_path);

@@ -1,14 +1,14 @@
 # JoyCam
 
 **JoyCam** — bridge your joystick, receiver, or transmitter to the CRSF
-(Crossfire) and IBUS (FlySky) protocols on Linux.  
+(Crossfire), IBUS (FlySky) and SBUS (Futaba) protocols on Linux.  
 Receive RC channels and link telemetry from an ELRS / TBS Crossfire receiver,
-generate IBUS control packets, or read a USB joystick and map its axes
+generate IBUS or SBUS control packets, or read a USB joystick and map its axes
 to channel values — all in one toolbox.
 
 Optimised for embedded Linux and **OpenIPC-compatible devices** (IP cameras, NVRs
-based on Sigmastar, Goke, Hisilicon SoCs). Run `crsf_rx` or `ibus_rx` directly
-on the camera's UART — no separate computer needed.
+based on Sigmastar, Goke, Hisilicon SoCs). Run `crsf_rx`, `ibus_rx` or `sbus_rx`
+directly on the camera's UART — no separate computer needed.
 
 ## Tools
 
@@ -127,11 +127,11 @@ and **SBUS** (`-p sbus`). Five display modes are available:
 
 | Mode | Command | Behaviour |
 |------|---------|-----------|
-| Status line | `./joystick <evdev>` | Show all channels every frame |
-| Verbose | `./joystick <evdev> -v` | Print every axis/button event + HEX dump |
-| Transmit | `./joystick <evdev> <serial> -p crsf\|ibus\|sbus` | Send frames silently |
-| Tx + status | `./joystick <evdev> <serial> -d -p crsf\|ibus\|sbus` | Send + status line |
-| Tx + verbose | `./joystick <evdev> <serial> -v -p crsf\|ibus\|sbus` | Send + raw events |
+| Status line | `./joystick -p crsf\|ibus\|sbus <evdev>` | Show all channels every frame |
+| Verbose | `./joystick -p crsf\|ibus\|sbus <evdev> -v` | Print every axis/button event + HEX dump |
+| Transmit | `./joystick -p crsf\|ibus\|sbus <evdev> <serial>` | Send frames silently |
+| Tx + status | `./joystick -p crsf\|ibus\|sbus <evdev> <serial> -d` | Send + status line |
+| Tx + verbose | `./joystick -p crsf\|ibus\|sbus <evdev> <serial> -v` | Send + raw events |
 
 Find your evdev device with:
 
@@ -142,17 +142,17 @@ ls -l /dev/input/by-id/*-joystick
 Examples:
 
 ```bash
-# Debug — see axis/button events (CRSF, default)
-./joystick /dev/input/by-id/usb-045e_028e-event-joystick
+# Debug — see axis/button events (CRSF)
+./joystick -p crsf /dev/input/by-id/usb-045e_028e-event-joystick
 
 # Silent transmit — send IBUS over UART
-./joystick /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyS0 -p ibus
+./joystick -p ibus /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyS0
 
 # Silent transmit — send SBUS over UART
-./joystick /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyAMA0 -p sbus
+./joystick -p sbus /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyAMA0
 
 # Debug + transmit (CRSF)
-./joystick /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyS0 -d
+./joystick -p crsf /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyS0 -d
 ```
 
 ## Testing / Verification
@@ -231,35 +231,35 @@ socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 \
 
 Move joystick sticks — the receiver shows live channel values.
 
-### Axis mapping (CRSF / IBUS)
+### Axis mapping (all protocols)
 
-| evdev code | Meaning | CRSF channel | IBUS channel |
-|-----------:|---------|:------------:|:------------:|
-| 0 | Left stick X (LX) | ch0 | ch0 |
-| 1 | Left stick Y (LY) | ch1 | ch1 |
-| 2 | Right stick X (RX) | ch2 | ch2 |
-| 5 | Right stick Y (RY) | ch3 | ch3 |
-| 9 | Left trigger (LT) | ch4 | ch4 |
-| 10 | D-pad X axis | ch5 | ch5 |
-| 16 | D-pad Y axis | ch6 | ch6 |
-| 17 | Extra axis | ch7 | ch7 |
+| evdev code | Meaning | CRSF channel | IBUS channel | SBUS channel |
+|-----------:|---------|:------------:|:------------:|:------------:|
+| 0 | Left stick X (LX) | ch0 | ch0 | ch0 |
+| 1 | Left stick Y (LY) | ch1 | ch1 | ch1 |
+| 2 | Right stick X (RX) | ch2 | ch2 | ch2 |
+| 5 | Right stick Y (RY) | ch3 | ch3 | ch3 |
+| 9 | Left trigger (LT) | ch4 | ch4 | ch4 |
+| 10 | D-pad X axis | ch5 | ch5 | ch5 |
+| 16 | D-pad Y axis | ch6 | ch6 | ch6 |
+| 17 | Extra axis | ch7 | ch7 | ch7 |
 
-### Button mapping (CRSF / IBUS)
+### Button mapping (all protocols)
 
-| evdev code | Linux name | CRSF channel | IBUS channel |
-|-----------:|------------|:------------:|:------------:|
-| 304 | `BTN_SOUTH` (A / cross) | ch8 | ch8 |
-| 305 | `BTN_EAST` (B / circle) | ch9 | ch9 |
-| 306 | `BTN_NORTH` (X / triangle) | ch10 | ch10 |
-| 307 | `BTN_WEST` (Y / square) | ch11 | ch11 |
-| 308 | `BTN_TL` (left bumper) | ch12 | ch12 |
-| 309 | `BTN_TR` (right bumper) | ch13 | ch13 |
-| 310 | `BTN_TL2` (left trigger) | ch14 | ch14 |
-| 311 | `BTN_TR2` (right trigger) | ch15 | ch15 |
-| 312 | `BTN_SELECT` (back) | ch16 | ch16 |
-| 313 | `BTN_START` (start) | ch17 | ch17 |
-| 314 | `BTN_THUMBL` (left stick click) | ch18 | ch18 |
-| 315 | `BTN_THUMBR` (right stick click) | ch19 | ch19 |
+| evdev code | Linux name | CRSF channel | IBUS channel | SBUS channel |
+|-----------:|------------|:------------:|:------------:|:------------:|
+| 304 | `BTN_SOUTH` (A / cross) | ch8 | ch8 | ch8 |
+| 305 | `BTN_EAST` (B / circle) | ch9 | ch9 | ch9 |
+| 306 | `BTN_NORTH` (X / triangle) | ch10 | ch10 | ch10 |
+| 307 | `BTN_WEST` (Y / square) | ch11 | ch11 | ch11 |
+| 308 | `BTN_TL` (left bumper) | ch12 | ch12 | ch12 |
+| 309 | `BTN_TR` (right bumper) | ch13 | ch13 | ch13 |
+| 310 | `BTN_TL2` (left trigger) | ch14 | ch14 | ch14 |
+| 311 | `BTN_TR2` (right trigger) | ch15 | ch15 | ch15 |
+| 312 | `BTN_SELECT` (back) | ch16 | ch16 | ch16 |
+| 313 | `BTN_START` (start) | ch17 | ch17 | ch17 |
+| 314 | `BTN_THUMBL` (left stick click) | ch18 | ch18 | ch18 |
+| 315 | `BTN_THUMBR` (right stick click) | ch19 | ch19 | ch19 |
 
 All other buttons are ignored.
 

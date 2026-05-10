@@ -5,6 +5,34 @@
 socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 pty,raw,echo=0,link=/tmp/ttyV1
 ```
 
+## RFC 2217 (serial-over-TCP) loopback
+
+```
+# Create a virtual serial pair
+socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 pty,raw,echo=0,link=/tmp/ttyV1
+
+# Bridge one end to TCP via socat (RFC 2217-compatible server)
+socat TCP-LISTEN:2217,reuseaddr,fork FILE:/tmp/ttyV0,raw,nonblock
+
+# In another terminal, connect via RFC 2217
+./crsf_rx tcp:127.0.0.1:2217
+```
+
+## Usage via TCP (`tcp:host:port` URI)
+
+All tools support RFC 2217 URIs:
+
+```bash
+# Receiver
+./crsf_rx tcp:192.168.1.100:2217
+
+# Transmitter
+./crsf_tx tcp:192.168.1.100:2217
+
+# Joystick
+./joystick -p crsf /dev/input/event0 tcp:192.168.1.100:2217 -d
+```
+
 
 
 

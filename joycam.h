@@ -78,16 +78,42 @@ typedef struct {
 
 #pragma pack(pop)
 
-// --- Serial port helpers ---
-int  set_baudrate_custom(int fd, int speed);
+// --- Transport types ---
+#define TRANSPORT_SERIAL   0
+#define TRANSPORT_RFC2217  1
+
+// --- RFC 2217 state (stored inside crsf_handle_t) ---
 typedef struct {
-    int fd;              /* POSIX fd, -1 if closed */
+    uint8_t buf[512];         /* de-escaped application data buffer */
+    int     buf_len;          /* bytes currently in buf */
+    uint8_t sub_buf[128];     /* sub-negotiation payload buffer */
+    int     sub_len;          /* bytes in sub_buf */
+    uint8_t iac_state;        /* IAC state machine state */
+    uint8_t iac_cmd;          /* pending WILL/WONT/DO/DONT */
+} rfc2217_state_t;
+
+// --- Serial port / RFC 2217 handle ---
+typedef struct {
+    int  fd;                   /* POSIX fd, -1 if closed */
+    int  type;                 /* TRANSPORT_SERIAL or TRANSPORT_RFC2217 */
+    union {
+        rfc2217_state_t tcp;
+    } u;
 } crsf_handle_t;
 
+int  set_baudrate_custom(int fd, int speed);
 int  crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baudrate);
 void crsf_serial_close(crsf_handle_t* h);
 int  crsf_read(crsf_handle_t* h, void* buf, size_t len, int timeout_ms);
 int  crsf_write(crsf_handle_t* h, const void* buf, size_t len, int timeout_ms);
+
+// --- RFC 2217 functions ---
+int  parse_tcp_uri(const char* uri, char* host, int hostlen, int* port);
+int  rfc2217_open(crsf_handle_t* h, const char* host, int port,
+                   int baudrate, int datasize, char parity, int stopbits);
+int  rfc2217_read(crsf_handle_t* h, void* buf, size_t len, int timeout_ms);
+int  rfc2217_write(crsf_handle_t* h, const void* buf, size_t len);
+void rfc2217_close(crsf_handle_t* h);
 
 // --- Common utilities ---
 void crsf_print_channels(const uint16_t* channels, int count);

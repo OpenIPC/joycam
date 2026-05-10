@@ -17,7 +17,29 @@
 
 // --- Serial port helpers ---
 
+static int serial_close_inner(crsf_handle_t* h) {
+    if (h->fd >= 0) {
+        tcdrain(h->fd);
+        close(h->fd);
+    }
+    h->fd = -1;
+    return 0;
+}
+
 int crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baudrate) {
+    /* If URI starts with "tcp:", delegate to RFC 2217. */
+    if (strncmp(port_name, "tcp:", 4) == 0) {
+        char host[256];
+        int port;
+        if (parse_tcp_uri(port_name, host, sizeof(host), &port) < 0) {
+            fprintf(stderr, "Error: invalid tcp URI '%s' (expected tcp:host:port)\n",
+                    port_name);
+            return -1;
+        }
+        /* Default parameters: 8N1, 1 stop bit */
+        return rfc2217_open(h, host, port, baudrate, 8, 'N', 0);
+    }
+
     int oflags = O_NOCTTY | O_NONBLOCK;
     if (mode == O_RDONLY)      oflags |= O_RDONLY;
     else if (mode == O_WRONLY) oflags |= O_WRONLY;
@@ -29,6 +51,8 @@ int crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baud
         syslog(LOG_ERR, "failed to open %s: %s", port_name, strerror(errno));
         return -1;
     }
+
+    h->type = TRANSPORT_SERIAL;
 
     /* Remove O_NONBLOCK after open — we use poll() for timed I/O. */
     int flags = fcntl(h->fd, F_GETFL);
@@ -51,15 +75,17 @@ int crsf_serial_open(const char* port_name, crsf_handle_t* h, int mode, int baud
 }
 
 void crsf_serial_close(crsf_handle_t* h) {
-    if (h->fd >= 0) {
-        tcdrain(h->fd);
-        close(h->fd);
-    }
-    h->fd = -1;
+    if (h->fd < 0) return;
+    if (h->type == TRANSPORT_RFC2217)
+        rfc2217_close(h);
+    else
+        serial_close_inner(h);
 }
 
 int crsf_read(crsf_handle_t* h, void* buf, size_t len, int timeout_ms) {
     if (h->fd < 0) return -1;
+    if (h->type == TRANSPORT_RFC2217)
+        return rfc2217_read(h, buf, len, timeout_ms);
     struct pollfd pfd = { .fd = h->fd, .events = POLLIN };
     int pr = poll(&pfd, 1, timeout_ms);
     if (pr <= 0) return pr;
@@ -69,6 +95,8 @@ int crsf_read(crsf_handle_t* h, void* buf, size_t len, int timeout_ms) {
 int crsf_write(crsf_handle_t* h, const void* buf, size_t len, int timeout_ms) {
     (void)timeout_ms;
     if (h->fd < 0) return -1;
+    if (h->type == TRANSPORT_RFC2217)
+        return rfc2217_write(h, buf, len);
     return (int)write(h->fd, buf, len);
 }
 

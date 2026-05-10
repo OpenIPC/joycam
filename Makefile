@@ -14,7 +14,7 @@ CFLAGS		+= -Wall -Wextra -Werror=implicit-function-declaration -Wunused-result
 CFLAGS		+= -ffunction-sections -fdata-sections
 LDFLAGS		:= -Wl,--gc-sections
 
-JOYCAM_OBJS	:= joycam.o joycrsf.o joyibus.o joysbus.o
+JOYCAM_OBJS	:= joycam.o joycrsf.o joyibus.o joysbus.o joyrfc2217.o
 
 DESTDIR		?=
 .PHONY: all clean install
@@ -88,6 +88,9 @@ joyibus.o: joyibus.c joycam.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 joysbus.o: joysbus.c joycam.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+joyrfc2217.o: joyrfc2217.c joycam.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 install: crsf_rx crsf_tx ibus_rx ibus_tx sbus_rx sbus_tx joystick

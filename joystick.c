@@ -199,14 +199,14 @@ int main(int argc, char** argv) {
     if (protocol == 1) baudrate = IBUS_BAUDRATE;
     else if (protocol == 2) baudrate = B9600;  /* SBUS: will override via termios2 */
     else baudrate = CRSF_BAUDRATE;
-    crsf_handle_t h = {-1};
+    crsf_handle_t h = { .fd = -1 };
     if (serial_port && crsf_serial_open(serial_port, &h, O_WRONLY, baudrate) < 0) {
         close(fd);
         closelog();
         return 1;
     }
-    /* Override baudrate for SBUS (custom 100000 via termios2). */
-    if (serial_port && protocol == 2) {
+    /* Override baudrate for SBUS (custom 100000 via termios2, serial only). */
+    if (serial_port && protocol == 2 && h.type == TRANSPORT_SERIAL) {
         if (set_baudrate_custom(h.fd, SBUS_BAUDRATE) < 0) {
             fprintf(stderr, "Error: cannot set 100000 baud on %s\n", serial_port);
             close(fd);

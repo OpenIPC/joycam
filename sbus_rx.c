@@ -71,17 +71,19 @@ int main(int argc, char** argv) {
     }
     signal(SIGPIPE, SIG_IGN);
 
-    crsf_handle_t h = {-1};
+    crsf_handle_t h = { .fd = -1 };
     if (crsf_serial_open(serial_port, &h, O_RDONLY, B9600) < 0) {
         closelog();
         return 1;
     }
-    /* Override with custom 100000 baud via termios2. */
-    if (set_baudrate_custom(h.fd, SBUS_BAUDRATE) < 0) {
-        fprintf(stderr, "Error: cannot set 100000 baud on %s\n", serial_port);
-        crsf_serial_close(&h);
-        closelog();
-        return 1;
+    /* Override with custom 100000 baud via termios2 (serial only). */
+    if (h.type == TRANSPORT_SERIAL) {
+        if (set_baudrate_custom(h.fd, SBUS_BAUDRATE) < 0) {
+            fprintf(stderr, "Error: cannot set 100000 baud on %s\n", serial_port);
+            crsf_serial_close(&h);
+            closelog();
+            return 1;
+        }
     }
 
     crsf_channels_t channels = {0};

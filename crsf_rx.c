@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
     }
     signal(SIGPIPE, SIG_IGN);
 
-    crsf_handle_t h = {-1};
+    crsf_handle_t h = { .fd = -1 };
     if (crsf_serial_open(serial_port, &h, O_RDONLY, 420000) < 0) {
         closelog();
         return 1;

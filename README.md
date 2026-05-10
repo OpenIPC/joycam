@@ -20,13 +20,13 @@ directly on the camera's UART — no separate computer needed.
 | `ibus_tx` | Generates IBUS RC channel packets at 50 Hz with a sawtooth sweep. | ✅ |
 | `sbus_rx` | Reads SBUS (Futaba) frames from a serial port, parses 16 RC channels. Requires hardware inverter for USB-UART. | ✅ |
 | `sbus_tx` | Generates SBUS RC channel packets at 100 Hz with a sawtooth sweep. Requires hardware inverter for USB-UART. | ✅ |
-| `joystick` | Reads a USB joystick/gamepad via evdev and maps axis values to the CRSF (172–1811), SBUS (172–1811), or IBUS (1000–2000) range. Can transmit directly over UART. | ⚠️ needs USB host |
+| `joystick` | Reads a USB joystick/gamepad via evdev and maps axis values to the CRSF (172–1811), SBUS (172–1811), or IBUS (1000–2000) range. Can transmit directly over UART or via RFC 2217 (serial-over-TCP). | ⚠️ needs USB host |
 
 ## Requirements
 
 - Linux (tested on Ubuntu 22.04 / Debian 12, OpenIPC firmware)
 - gcc with GNU99 support (or cross-compiler for target SoC)
-- **No external libraries.** Pure POSIX + Linux ioctl.
+- **No external libraries.** Pure POSIX + Linux ioctl (with POSIX sockets for RFC 2217).
   Only depends on the C standard library and kernel headers
   (`linux/input.h` for evdev support).
 
@@ -262,6 +262,50 @@ Move joystick sticks — the receiver shows live channel values.
 | 315 | `BTN_THUMBR` (right stick click) | ch19 | ch19 | ch19 |
 
 All other buttons are ignored.
+
+## RFC 2217 (Serial-over-TCP) support
+
+All tools can connect to a remote serial port via **RFC 2217** (Telnet COM Port
+Control Option) — just use a `tcp:host:port` URI instead of a device path:
+
+```bash
+# Connect to an RFC 2217 server instead of a local UART
+./crsf_rx tcp:192.168.1.100:2217
+./ibus_tx tcp:192.168.1.100:2217
+./joystick -p crsf /dev/input/event0 tcp:192.168.1.100:2217 -d
+```
+
+The client automatically negotiates baud rate, data size, parity, and stop bits
+using the Telnet COM-PORT-OPTION protocol. The `0xFF` byte is transparently
+escaped/unescaped in the data stream. Modem and line state notifications
+are logged at debug level.
+
+### Testing with socat
+
+Create a virtual RFC 2217 server that bridges to a local serial port:
+
+```bash
+socat TCP-LISTEN:2217,reuseaddr,fork FILE:/dev/ttyS0,raw,nonblock,waitlock=/tmp/s0.lock
+```
+
+Then connect from another machine:
+
+```bash
+./crsf_rx tcp:192.168.1.200:2217
+```
+
+### Testing without hardware (loopback)
+
+```bash
+# Terminal A — RFC 2217 server (dummy)
+socat -d -d TCP-LISTEN:2217,reuseaddr pty,raw,echo=0,link=/tmp/ttyV0 &
+
+# Terminal B — generate CRSF frames
+./crsf_tx /tmp/ttyV0
+
+# Terminal C — receive via RFC 2217
+./crsf_rx tcp:127.0.0.1:2217
+```
 
 ## Project structure
 

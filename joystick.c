@@ -71,21 +71,30 @@ static void process_button_event(const struct input_event* ev,
 }
 
 static void print_help(const char* prog) {
-    printf("Joystick reader v%s\n", VERSION);
-    printf("Usage:\n");
-    printf("  %s -p crsf|ibus|sbus <evdev_path>                    — status line only\n", prog);
-    printf("  %s -p crsf|ibus|sbus <evdev_path> -v                 — verbose (raw events)\n", prog);
-    printf("  %s -p crsf|ibus|sbus <evdev_path> <serial_port>      — transmit (silent)\n", prog);
-    printf("  %s -p crsf|ibus|sbus <evdev_path> <serial> -d        — transmit + status line\n", prog);
-    printf("  %s -p crsf|ibus|sbus <evdev_path> <serial> -v        — transmit + raw events\n", prog);
-    printf("  %s -h / --help                     — this help\n", prog);
-    printf("  %s -V / --version                  — show version\n", prog);
-    printf("\nFlags:\n");
-    printf("  -d, --debug         show compact status line every frame\n");
-    printf("  -v, --verbose       show every axis and button event\n");
-    printf("  -p, --protocol <p>  REQUIRED. Output protocol: crsf, ibus, or sbus\n");
-    printf("\nDefault evdev path: /dev/input/by-id/usb-...-event-joystick\n");
-    printf("Find your device:  ls -l /dev/input/by-id/*-joystick\n");
+    printf("Joystick reader v%s\n\n", VERSION);
+    printf("Usage:  %s -p <proto> <evdev> [<port>] [options]\n\n", prog);
+    printf("Reads a USB joystick/gamepad via evdev and maps axis/button values\n");
+    printf("to RC channels. Can display on screen, transmit over UART, or\n");
+    printf("send via RFC 2217 (serial-over-TCP).\n\n");
+    printf("Modes:\n");
+    printf("  %s -p crsf|ibus|sbus <evdev>                   status line\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev> -v                verbose (raw events)\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev> <port>            transmit (silent)\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev> <port> -d         transmit + status\n", prog);
+    printf("  %s -p crsf|ibus|sbus <evdev> <port> -v         transmit + verbose\n\n", prog);
+    printf("Arguments:\n");
+    printf("  <evdev>   joystick device    e.g. /dev/input/event0\n");
+    printf("  <port>    serial device      e.g. /dev/ttyS0\n");
+    printf("            tcp:host:port      e.g. tcp:192.168.1.5:2217\n\n");
+    printf("Options:\n");
+    printf("  -p, --protocol <proto>\n");
+    printf("            Output protocol: crsf, ibus, or sbus (REQUIRED)\n");
+    printf("  -d, --debug     show compact status line every frame\n");
+    printf("  -v, --verbose   show every axis and button event\n");
+    printf("  -h, --help      this help\n");
+    printf("  -V, --version   show version\n\n");
+    printf("Find your evdev device:\n");
+    printf("  ls -l /dev/input/by-id/*-joystick\n");
 }
 
 int main(int argc, char** argv) {

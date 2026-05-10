@@ -27,11 +27,14 @@ int main(int argc, char** argv) {
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            printf("CRSF receiver v%s\n", VERSION);
-            printf("Usage: %s <serial_port> [-d]\n", argv[0]);
-            printf("  Reads CRSF frames from a serial port and decodes\n");
-            printf("  RC channels and link statistics.\n");
-            printf("\nOptions:\n");
+            printf("CRSF receiver v%s\n\n", VERSION);
+            printf("Usage:  %s <port> [-d]\n\n", argv[0]);
+            printf("Reads CRSF frames from a serial port or RFC 2217 TCP endpoint\n");
+            printf("and decodes 16 RC channels (11-bit) and link statistics.\n\n");
+            printf("Arguments:\n");
+            printf("  <port>   serial device   e.g. /dev/ttyS0\n");
+            printf("           tcp:host:port   e.g. tcp:192.168.1.5:2217\n\n");
+            printf("Options:\n");
             printf("  -d, --debug   hex dump every received frame\n");
             return 0;
         }

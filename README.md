@@ -14,13 +14,13 @@ directly on the camera's UART — no separate computer needed.
 
 | Tool | Description | OpenIPC |
 |------|-------------|---------|
-| `crsf_rx` | Reads CRSF frames from a serial port, parses 16 RC channels (11-bit) and link statistics (RSSI, LQ, RF power). | ✅ |
-| `crsf_tx` | Generates CRSF RC channel packets at 100 Hz with a sawtooth sweep on a selected channel. | ✅ |
-| `ibus_rx` | Reads IBUS (FlySky) frames from a serial port, parses 14 RC channels. | ✅ |
-| `ibus_tx` | Generates IBUS RC channel packets at 50 Hz with a sawtooth sweep. | ✅ |
-| `sbus_rx` | Reads SBUS (Futaba) frames from a serial port, parses 16 RC channels. Requires hardware inverter for USB-UART. | ✅ |
-| `sbus_tx` | Generates SBUS RC channel packets at 100 Hz with a sawtooth sweep. Requires hardware inverter for USB-UART. | ✅ |
-| `joystick` | Reads a USB joystick/gamepad via evdev and maps axis values to the CRSF (172–1811), SBUS (172–1811), or IBUS (1000–2000) range. Can transmit directly over UART or via RFC 2217 (serial-over-TCP). | ⚠️ needs USB host |
+| `crsf_rx` | Reads CRSF frames from a serial port or RFC 2217 endpoint, parses 16 RC channels (11-bit) and link statistics (RSSI, LQ, RF power). | ✅ |
+| `crsf_tx` | Generates CRSF RC channel packets at 100 Hz with a sawtooth sweep. Supports RFC 2217 (`tcp:host:port`). | ✅ |
+| `ibus_rx` | Reads IBUS (FlySky) frames from a serial port or RFC 2217 endpoint, parses 14 RC channels. | ✅ |
+| `ibus_tx` | Generates IBUS RC channel packets at 50 Hz with a sawtooth sweep. Supports RFC 2217 (`tcp:host:port`). | ✅ |
+| `sbus_rx` | Reads SBUS (Futaba) frames from a serial port or RFC 2217 endpoint, parses 16 RC channels. USB-UART needs hardware inverter. | ✅ |
+| `sbus_tx` | Generates SBUS RC channel packets at 100 Hz with a sawtooth sweep. Supports RFC 2217 (`tcp:host:port`). USB-UART needs hardware inverter. | ✅ |
+| `joystick` | Reads a USB joystick/gamepad via evdev and maps axes/buttons to RC channels over CRSF, SBUS, or IBUS. Output to UART, RFC 2217, or screen. | ⚠️ needs USB host |
 
 ## Requirements
 
@@ -49,7 +49,11 @@ Seven binaries are produced: `crsf_rx`, `crsf_tx`, `ibus_rx`, `ibus_tx`, `sbus_r
 ### Receive CRSF data
 
 ```bash
+# Local serial port
 ./crsf_rx /dev/ttyUSB0 [-d]
+
+# Remote via RFC 2217
+./crsf_rx tcp:192.168.1.5:2217 [-d]
 ```
 
 Output:
@@ -68,7 +72,11 @@ UART1 or UART2 (e.g. `/dev/ttyAMA1`).
 ### Receive IBUS data
 
 ```bash
+# Local serial port
 ./ibus_rx /dev/ttyUSB0 [-d]
+
+# Remote via RFC 2217
+./ibus_rx tcp:192.168.1.5:2217 [-d]
 ```
 
 Output:
@@ -83,7 +91,11 @@ IBUS uses 115200 baud, 14 channels in the 1000–2000 range.
 ### Receive SBUS data
 
 ```bash
+# Local serial port
 ./sbus_rx /dev/ttyAMA0 [-d]
+
+# Remote via RFC 2217
+./sbus_rx tcp:192.168.1.5:2217 [-d]
 ```
 
 SBUS uses 100000 baud 8E2 with an inverted signal. On most SoC UARTs
@@ -102,19 +114,25 @@ Channels: 0:992 1:992 2:992 3:992 4:992 5:992 6:992 7:992 8:992 9:992 10:992 11:
 CRSF (100 Hz):
 
 ```bash
+# Local serial port
 ./crsf_tx /dev/ttyACM0 [-a <ch>]
+
+# Remote via RFC 2217
+./crsf_tx tcp:192.168.1.5:2217 [-a <ch>]
 ```
 
 IBUS (50 Hz):
 
 ```bash
 ./ibus_tx /dev/ttyACM0 [-a <ch>]
+./ibus_tx tcp:192.168.1.5:2217 [-a <ch>]
 ```
 
 SBUS (100 Hz):
 
 ```bash
 ./sbus_tx /dev/ttyAMA0 [-a <ch>]
+./sbus_tx tcp:192.168.1.5:2217 [-a <ch>]
 ```
 
 Channel 0 sweeps by default. Use `-a <ch>` to sweep a different channel.
@@ -129,9 +147,12 @@ and **SBUS** (`-p sbus`). Five display modes are available:
 |------|---------|-----------|
 | Status line | `./joystick -p crsf\|ibus\|sbus <evdev>` | Show all channels every frame |
 | Verbose | `./joystick -p crsf\|ibus\|sbus <evdev> -v` | Print every axis/button event + HEX dump |
-| Transmit | `./joystick -p crsf\|ibus\|sbus <evdev> <serial>` | Send frames silently |
-| Tx + status | `./joystick -p crsf\|ibus\|sbus <evdev> <serial> -d` | Send + status line |
-| Tx + verbose | `./joystick -p crsf\|ibus\|sbus <evdev> <serial> -v` | Send + raw events |
+| Transmit | `./joystick -p crsf\|ibus\|sbus <evdev> <port>` | Send frames silently |
+| Tx + status | `./joystick -p crsf\|ibus\|sbus <evdev> <port> -d` | Send + status line |
+| Tx + verbose | `./joystick -p crsf\|ibus\|sbus <evdev> <port> -v` | Send + raw events |
+
+`<port>` can be a local serial device (`/dev/ttyS0`) or an RFC 2217 TCP
+endpoint (`tcp:host:port`).
 
 Find your evdev device with:
 
@@ -145,14 +166,14 @@ Examples:
 # Debug — see axis/button events (CRSF)
 ./joystick -p crsf /dev/input/by-id/usb-045e_028e-event-joystick
 
-# Silent transmit — send IBUS over UART
+# Silent transmit — IBUS over local UART
 ./joystick -p ibus /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyS0
 
-# Silent transmit — send SBUS over UART
-./joystick -p sbus /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyAMA0
+# Silent transmit — SBUS over RFC 2217
+./joystick -p sbus /dev/input/by-id/usb-045e_028e-event-joystick tcp:192.168.1.5:2217
 
-# Debug + transmit (CRSF)
-./joystick -p crsf /dev/input/by-id/usb-045e_028e-event-joystick /dev/ttyS0 -d
+# Debug + transmit over RFC 2217 (CRSF)
+./joystick -p crsf /dev/input/by-id/usb-045e_028e-event-joystick tcp:192.168.1.5:2217 -d
 ```
 
 ## Testing / Verification
@@ -230,6 +251,20 @@ socat -d -d pty,raw,echo=0,link=/tmp/ttyV0 \
 ```
 
 Move joystick sticks — the receiver shows live channel values.
+
+### RFCP 2217 loopback (remote serial bridge)
+
+Bridge a local serial port to TCP, then connect from another machine:
+
+```bash
+# On the machine with the serial device
+socat TCP-LISTEN:2217,reuseaddr,fork FILE:/dev/ttyS0,raw,nonblock,waitlock=/tmp/s0.lock
+
+# On the remote machine
+./crsf_rx tcp:192.168.1.5:2217
+./crsf_tx tcp:192.168.1.5:2217
+./joystick -p crsf /dev/input/event0 tcp:192.168.1.5:2217 -d
+```
 
 ### Axis mapping (all protocols)
 
@@ -316,6 +351,7 @@ socat -d -d TCP-LISTEN:2217,reuseaddr pty,raw,echo=0,link=/tmp/ttyV0 &
 ├── joycam.c              — Shared utils: serial I/O, channel display, axis/button mapping
 ├── joycrsf.c             — CRSF protocol: CRC8, packet parser FSM, packet generator
 ├── joyibus.c             — IBUS protocol: checksum, packet parser FSM, packet generator
+├── joyrfc2217.c          — RFC 2217 (Telnet COM Port Control): TCP client, IAC FSM, data escaping
 ├── joysbus.c             — SBUS protocol: termios2 baudrate, packet parser FSM, packet generator
 ├── crsf_rx.c             — CRSF receiver
 ├── crsf_tx.c             — CRSF transmitter

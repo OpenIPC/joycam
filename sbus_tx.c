@@ -32,13 +32,16 @@ int main(int argc, char** argv) {
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            printf("SBUS transmitter v%s\n", VERSION);
-            printf("Usage: %s <serial_port> [-a <ch>]\n", argv[0]);
-            printf("  Generates SBUS (Futaba) RC channel packets at 100 Hz\n");
-            printf("  with a sawtooth sweep on a selected channel.\n");
-            printf("\nOptions:\n");
-            printf("  -a <ch>   channel to sweep (default: 0)\n");
-            printf("\nNote: SBUS uses 100000 baud 8E2 with inverted signal.\n");
+            printf("SBUS transmitter v%s\n\n", VERSION);
+            printf("Usage:  %s <port> [-a <ch>]\n\n", argv[0]);
+            printf("Generates SBUS (Futaba) RC channel packets at 100 Hz\n");
+            printf("with a sawtooth sweep on a selected channel.\n\n");
+            printf("Arguments:\n");
+            printf("  <port>   serial device   e.g. /dev/ttyS0\n");
+            printf("           tcp:host:port   e.g. tcp:192.168.1.5:2217\n\n");
+            printf("Options:\n");
+            printf("  -a <ch>   channel to sweep (default: 0)\n\n");
+            printf("Note: SBUS uses 100000 baud 8E2 with inverted signal.\n");
             return 0;
         }
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {

@@ -31,13 +31,16 @@ int main(int argc, char** argv) {
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            printf("SBUS receiver v%s\n", VERSION);
-            printf("Usage: %s <serial_port> [-d]\n", argv[0]);
-            printf("  Reads SBUS (Futaba) frames from a serial port\n");
-            printf("  and decodes 16 RC channels.\n");
-            printf("\nOptions:\n");
-            printf("  -d, --debug   hex dump every received frame\n");
-            printf("\nNote: SBUS uses 100000 baud 8E2 with inverted signal.\n");
+            printf("SBUS receiver v%s\n\n", VERSION);
+            printf("Usage:  %s <port> [-d]\n\n", argv[0]);
+            printf("Reads SBUS (Futaba) frames from a serial port or\n");
+            printf("RFC 2217 TCP endpoint and decodes 16 RC channels.\n\n");
+            printf("Arguments:\n");
+            printf("  <port>   serial device   e.g. /dev/ttyS0\n");
+            printf("           tcp:host:port   e.g. tcp:192.168.1.5:2217\n\n");
+            printf("Options:\n");
+            printf("  -d, --debug   hex dump every received frame\n\n");
+            printf("Note: SBUS uses 100000 baud 8E2 with inverted signal.\n");
             return 0;
         }
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
